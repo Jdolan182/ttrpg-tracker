@@ -43,6 +43,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Share Mode
+    |--------------------------------------------------------------------------
+    |
+    | Set by scripts/share.sh while the dev app is shared through a tunnel, so
+    | pages use the built assets rather than the local Vite dev server.
+    |
+    */
+
+    'share_mode' => (bool) env('SHARE_MODE', false),
+
+    // Proxies trusted for X-Forwarded-* headers: "*" or a comma-separated list. Null trusts none.
+    'trusted_proxies' => env('TRUSTED_PROXIES'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application URL
     |--------------------------------------------------------------------------
     |

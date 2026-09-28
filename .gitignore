@@ -21,3 +21,7 @@ yarn-error.log
 /.nova
 /.vscode
 /.zed
+
+# Left behind only if scripts/share.sh is killed without cleaning up
+.env.before-share
+/public/hot.before-share
