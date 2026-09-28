@@ -1,0 +1,212 @@
+{
+    "attribution": "This work includes material taken from the System Reference Document 5.1 (\"SRD 5.1\") by Wizards of the Coast LLC, available at https://dnd.wizards.com/resources/systems-reference-document. The SRD 5.1 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.",
+    "creatures": [
+        {
+            "name": "Bandit",
+            "kind": "npc",
+            "summary": "Medium humanoid (any race), any non-lawful alignment",
+            "rating": "CR 1/8",
+            "hp": 11,
+            "ac": 12,
+            "speed": "30 ft.",
+            "stats": { "STR": 11, "DEX": 12, "CON": 12, "INT": 10, "WIS": 10, "CHA": 10 },
+            "traits": [],
+            "actions": [
+                { "name": "Scimitar", "description": "Melee weapon attack: +3 to hit, reach 5 ft., one target. Hit: 4 (1d6 + 1) slashing damage." },
+                { "name": "Light Crossbow", "description": "Ranged weapon attack: +3 to hit, range 80/320 ft., one target. Hit: 5 (1d8 + 1) piercing damage." }
+            ]
+        },
+        {
+            "name": "Bandit Captain",
+            "kind": "npc",
+            "summary": "Medium humanoid (any race), any non-lawful alignment",
+            "rating": "CR 2",
+            "hp": 65,
+            "ac": 15,
+            "speed": "30 ft.",
+            "stats": { "STR": 15, "DEX": 16, "CON": 14, "INT": 14, "WIS": 11, "CHA": 14 },
+            "traits": [],
+            "actions": [
+                { "name": "Multiattack", "description": "The captain makes three melee attacks: two with its scimitar and one with its dagger. Or the captain makes two ranged attacks with its daggers." },
+                { "name": "Scimitar", "description": "Melee weapon attack: +5 to hit, reach 5 ft., one target. Hit: 6 (1d6 + 3) slashing damage." },
+                { "name": "Dagger", "description": "Melee or ranged weapon attack: +5 to hit, reach 5 ft. or range 20/60 ft., one target. Hit: 5 (1d4 + 3) piercing damage." },
+                { "name": "Parry (Reaction)", "description": "The captain adds 2 to its AC against one melee attack that would hit it. To do so, the captain must see the attacker and be wielding a melee weapon." }
+            ]
+        },
+        {
+            "name": "Giant Spider",
+            "kind": "monster",
+            "summary": "Large beast, unaligned",
+            "rating": "CR 1",
+            "hp": 26,
+            "ac": 14,
+            "speed": "30 ft., climb 30 ft.",
+            "stats": { "STR": 14, "DEX": 16, "CON": 12, "INT": 2, "WIS": 11, "CHA": 4 },
+            "traits": [
+                { "name": "Spider Climb", "description": "The spider can climb difficult surfaces, including upside down on ceilings, without needing to make an ability check." },
+                { "name": "Web Sense", "description": "While in contact with a web, the spider knows the exact location of any other creature in contact with the same web." },
+                { "name": "Web Walker", "description": "The spider ignores movement restrictions caused by webbing." }
+            ],
+            "actions": [
+                { "name": "Bite", "description": "Melee weapon attack: +5 to hit, reach 5 ft., one creature. Hit: 7 (1d8 + 3) piercing damage, and the target must make a DC 11 Constitution saving throw, taking 9 (2d8) poison damage on a failed save, or half as much damage on a successful one." },
+                { "name": "Web (Recharge 5-6)", "description": "Ranged weapon attack: +5 to hit, range 30/60 ft., one creature. Hit: The target is restrained by webbing. As an action, the restrained target can make a DC 12 Strength check, bursting the webbing on a success." }
+            ]
+        },
+        {
+            "name": "Goblin",
+            "kind": "monster",
+            "summary": "Small humanoid (goblinoid), neutral evil",
+            "rating": "CR 1/4",
+            "hp": 7,
+            "ac": 15,
+            "speed": "30 ft.",
+            "stats": { "STR": 8, "DEX": 14, "CON": 10, "INT": 10, "WIS": 8, "CHA": 8 },
+            "traits": [
+                { "name": "Nimble Escape", "description": "The goblin can take the Disengage or Hide action as a bonus action on each of its turns." }
+            ],
+            "actions": [
+                { "name": "Scimitar", "description": "Melee weapon attack: +4 to hit, reach 5 ft., one target. Hit: 5 (1d6 + 2) slashing damage." },
+                { "name": "Shortbow", "description": "Ranged weapon attack: +4 to hit, range 80/320 ft., one target. Hit: 5 (1d6 + 2) piercing damage." }
+            ]
+        },
+        {
+            "name": "Goblin Boss",
+            "kind": "monster",
+            "summary": "Small humanoid (goblinoid), neutral evil",
+            "rating": "CR 1",
+            "hp": 21,
+            "ac": 17,
+            "speed": "30 ft.",
+            "stats": { "STR": 10, "DEX": 14, "CON": 10, "INT": 10, "WIS": 8, "CHA": 10 },
+            "traits": [
+                { "name": "Nimble Escape", "description": "The goblin can take the Disengage or Hide action as a bonus action on each of its turns." }
+            ],
+            "actions": [
+                { "name": "Multiattack", "description": "The goblin makes two attacks with its scimitar. The second attack has disadvantage." },
+                { "name": "Scimitar", "description": "Melee weapon attack: +4 to hit, reach 5 ft., one target. Hit: 5 (1d6 + 2) slashing damage." },
+                { "name": "Javelin", "description": "Melee or ranged weapon attack: +2 to hit, reach 5 ft. or range 30/120 ft., one target. Hit: 3 (1d6) piercing damage." },
+                { "name": "Redirect Attack (Reaction)", "description": "When a creature the goblin can see targets it with an attack, the goblin chooses another goblin within 5 feet of it. The two goblins swap places, and the chosen goblin becomes the target instead." }
+            ]
+        },
+        {
+            "name": "Kobold",
+            "kind": "monster",
+            "summary": "Small humanoid (kobold), lawful evil",
+            "rating": "CR 1/8",
+            "hp": 5,
+            "ac": 12,
+            "speed": "30 ft.",
+            "stats": { "STR": 7, "DEX": 15, "CON": 9, "INT": 8, "WIS": 7, "CHA": 8 },
+            "traits": [
+                { "name": "Sunlight Sensitivity", "description": "While in sunlight, the kobold has disadvantage on attack rolls, as well as on Wisdom (Perception) checks that rely on sight." },
+                { "name": "Pack Tactics", "description": "The kobold has advantage on an attack roll against a creature if at least one of the kobold's allies is within 5 feet of the creature and the ally isn't incapacitated." }
+            ],
+            "actions": [
+                { "name": "Dagger", "description": "Melee weapon attack: +4 to hit, reach 5 ft., one target. Hit: 4 (1d4 + 2) piercing damage." },
+                { "name": "Sling", "description": "Ranged weapon attack: +4 to hit, range 30/120 ft., one target. Hit: 4 (1d4 + 2) bludgeoning damage." }
+            ]
+        },
+        {
+            "name": "Ogre",
+            "kind": "monster",
+            "summary": "Large giant, chaotic evil",
+            "rating": "CR 2",
+            "hp": 59,
+            "ac": 11,
+            "speed": "40 ft.",
+            "stats": { "STR": 19, "DEX": 8, "CON": 16, "INT": 5, "WIS": 7, "CHA": 7 },
+            "traits": [],
+            "actions": [
+                { "name": "Greatclub", "description": "Melee weapon attack: +6 to hit, reach 5 ft., one target. Hit: 13 (2d8 + 4) bludgeoning damage." },
+                { "name": "Javelin", "description": "Melee or ranged weapon attack: +6 to hit, reach 5 ft. or range 30/120 ft., one target. Hit: 11 (2d6 + 4) piercing damage." }
+            ]
+        },
+        {
+            "name": "Orc",
+            "kind": "monster",
+            "summary": "Medium humanoid (orc), chaotic evil",
+            "rating": "CR 1/2",
+            "hp": 15,
+            "ac": 13,
+            "speed": "30 ft.",
+            "stats": { "STR": 16, "DEX": 12, "CON": 16, "INT": 7, "WIS": 11, "CHA": 10 },
+            "traits": [
+                { "name": "Aggressive", "description": "As a bonus action, the orc can move up to its speed toward a hostile creature that it can see." }
+            ],
+            "actions": [
+                { "name": "Greataxe", "description": "Melee weapon attack: +5 to hit, reach 5 ft., one target. Hit: 9 (1d12 + 3) slashing damage." },
+                { "name": "Javelin", "description": "Melee or ranged weapon attack: +5 to hit, reach 5 ft. or range 30/120 ft., one target. Hit: 6 (1d6 + 3) piercing damage." }
+            ]
+        },
+        {
+            "name": "Owlbear",
+            "kind": "monster",
+            "summary": "Large monstrosity, unaligned",
+            "rating": "CR 3",
+            "hp": 59,
+            "ac": 13,
+            "speed": "40 ft.",
+            "stats": { "STR": 20, "DEX": 12, "CON": 17, "INT": 3, "WIS": 12, "CHA": 7 },
+            "traits": [
+                { "name": "Keen Sight and Smell", "description": "The owlbear has advantage on Wisdom (Perception) checks that rely on sight or smell." }
+            ],
+            "actions": [
+                { "name": "Multiattack", "description": "The owlbear makes two attacks: one with its beak and one with its claws." },
+                { "name": "Beak", "description": "Melee weapon attack: +7 to hit, reach 5 ft., one creature. Hit: 10 (1d10 + 5) piercing damage." },
+                { "name": "Claws", "description": "Melee weapon attack: +7 to hit, reach 5 ft., one target. Hit: 14 (2d8 + 5) slashing damage." }
+            ]
+        },
+        {
+            "name": "Skeleton",
+            "kind": "monster",
+            "summary": "Medium undead, lawful evil",
+            "rating": "CR 1/4",
+            "hp": 13,
+            "ac": 13,
+            "speed": "30 ft.",
+            "stats": { "STR": 10, "DEX": 14, "CON": 15, "INT": 6, "WIS": 8, "CHA": 5 },
+            "traits": [
+                { "name": "Damage Vulnerabilities", "description": "Bludgeoning." },
+                { "name": "Damage Immunities", "description": "Poison." },
+                { "name": "Condition Immunities", "description": "Exhaustion, poisoned." }
+            ],
+            "actions": [
+                { "name": "Shortsword", "description": "Melee weapon attack: +4 to hit, reach 5 ft., one target. Hit: 5 (1d6 + 2) piercing damage." },
+                { "name": "Shortbow", "description": "Ranged weapon attack: +4 to hit, range 80/320 ft., one target. Hit: 5 (1d6 + 2) piercing damage." }
+            ]
+        },
+        {
+            "name": "Wolf",
+            "kind": "monster",
+            "summary": "Medium beast, unaligned",
+            "rating": "CR 1/4",
+            "hp": 11,
+            "ac": 13,
+            "speed": "40 ft.",
+            "stats": { "STR": 12, "DEX": 15, "CON": 12, "INT": 3, "WIS": 12, "CHA": 6 },
+            "traits": [
+                { "name": "Keen Hearing and Smell", "description": "The wolf has advantage on Wisdom (Perception) checks that rely on hearing or smell." },
+                { "name": "Pack Tactics", "description": "The wolf has advantage on an attack roll against a creature if at least one of the wolf's allies is within 5 feet of the creature and the ally isn't incapacitated." }
+            ],
+            "actions": [
+                { "name": "Bite", "description": "Melee weapon attack: +4 to hit, reach 5 ft., one target. Hit: 7 (2d4 + 2) piercing damage. If the target is a creature, it must succeed on a DC 11 Strength saving throw or be knocked prone." }
+            ]
+        },
+        {
+            "name": "Zombie",
+            "kind": "monster",
+            "summary": "Medium undead, neutral evil",
+            "rating": "CR 1/4",
+            "hp": 22,
+            "ac": 8,
+            "speed": "20 ft.",
+            "stats": { "STR": 13, "DEX": 6, "CON": 16, "INT": 3, "WIS": 6, "CHA": 5 },
+            "traits": [
+                { "name": "Undead Fortitude", "description": "If damage reduces the zombie to 0 hit points, it must make a Constitution saving throw with a DC of 5 + the damage taken, unless the damage is radiant or from a critical hit. On a success, the zombie drops to 1 hit point instead." }
+            ],
+            "actions": [
+                { "name": "Slam", "description": "Melee weapon attack: +3 to hit, reach 5 ft., one target. Hit: 4 (1d6 + 1) bludgeoning damage." }
+            ]
+        }
+    ]
+}
