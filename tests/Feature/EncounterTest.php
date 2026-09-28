@@ -19,8 +19,8 @@ class EncounterTest extends TestCase
             'round' => 2,
             'activeIndex' => 1,
             'combatants' => [
-                ['id' => 'a', 'creatureId' => $creature->id, 'name' => "{$creature->name} 1", 'initiative' => 15, 'hp' => 3, 'maxHp' => 7, 'ac' => 15, 'conditions' => ['Prone']],
-                ['id' => 'b', 'creatureId' => $creature->id, 'name' => "{$creature->name} 2", 'initiative' => 9, 'hp' => 7, 'maxHp' => 7, 'ac' => 15, 'conditions' => []],
+                ['id' => 'a', 'creatureId' => $creature->id, 'name' => "{$creature->name} 1", 'side' => 'enemy', 'initiative' => 15, 'hp' => 3, 'maxHp' => 7, 'ac' => 15, 'conditions' => ['Prone']],
+                ['id' => 'b', 'creatureId' => $creature->id, 'name' => "{$creature->name} 2", 'side' => 'ally', 'initiative' => 9, 'hp' => 7, 'maxHp' => 7, 'ac' => 15, 'conditions' => []],
             ],
         ], $overrides);
     }
@@ -95,6 +95,57 @@ class EncounterTest extends TestCase
 
         $this->actingAs($user)->post('/encounters', $this->payload($theirs))->assertSessionHasErrors('combatants');
         $this->assertDatabaseCount('encounters', 0);
+    }
+
+    public function test_sides_are_saved_and_can_differ_for_the_same_creature()
+    {
+        $user = User::factory()->create();
+        $goblin = Creature::factory()->srd()->create();
+
+        $this->actingAs($user)->post('/encounters', $this->payload($goblin))->assertSessionHasNoErrors();
+
+        $combatants = $user->encounters()->sole()->combatants;
+        $this->assertSame(['enemy', 'ally'], array_column($combatants, 'side'));
+    }
+
+    public function test_only_player_characters_can_be_on_the_player_side()
+    {
+        $user = User::factory()->create();
+        $goblin = Creature::factory()->srd()->create();
+        $hero = Creature::factory()->for($user)->create(['kind' => 'player']);
+        $this->actingAs($user);
+
+        $monsterAsPlayer = $this->payload($goblin);
+        $monsterAsPlayer['combatants'][0]['side'] = 'player';
+        $this->post('/encounters', $monsterAsPlayer)->assertSessionHasErrors('combatants.0.side');
+
+        $playerAsAlly = $this->payload($hero);
+        $playerAsAlly['combatants'][0]['side'] = 'player';
+        $this->post('/encounters', $playerAsAlly)->assertSessionHasErrors('combatants.1.side');
+
+        $this->post('/encounters', $this->payload($goblin, ['combatants' => [
+            ['id' => 'x', 'creatureId' => $goblin->id, 'name' => 'Goblin', 'side' => 'sidekick', 'initiative' => 1, 'hp' => 1, 'maxHp' => 1, 'ac' => 1, 'conditions' => []],
+        ]]))->assertSessionHasErrors('combatants.0.side');
+
+        $this->assertDatabaseCount('encounters', 0);
+    }
+
+    public function test_a_missing_side_defaults_from_the_creature()
+    {
+        $user = User::factory()->create();
+        $goblin = Creature::factory()->srd()->create(['kind' => 'monster']);
+        $captain = Creature::factory()->srd()->create(['kind' => 'npc']);
+        $hero = Creature::factory()->for($user)->create(['kind' => 'player']);
+
+        $combatant = fn (Creature $creature, string $id) => [
+            'id' => $id, 'creatureId' => $creature->id, 'name' => $creature->name, 'initiative' => 1, 'hp' => 1, 'maxHp' => 1, 'ac' => 1, 'conditions' => [],
+        ];
+
+        $this->actingAs($user)->post('/encounters', $this->payload($goblin, ['activeIndex' => 0, 'combatants' => [
+            $combatant($goblin, 'a'), $combatant($captain, 'b'), $combatant($hero, 'c'),
+        ]]))->assertSessionHasNoErrors();
+
+        $this->assertSame(['enemy', 'neutral', 'player'], array_column($user->encounters()->sole()->combatants, 'side'));
     }
 
     public function test_the_active_turn_must_be_a_combatant()

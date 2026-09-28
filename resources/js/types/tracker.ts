@@ -31,11 +31,14 @@ export interface Creature {
     actions: CreatureEntry[];
 }
 
+export type CombatantSide = 'player' | 'ally' | 'neutral' | 'enemy';
+
 export interface Combatant {
     // Unique within the encounter; the same creature can appear several times.
     id: string;
     creatureId: number;
     name: string;
+    side: CombatantSide;
     initiative: number;
     hp: number;
     maxHp: number;

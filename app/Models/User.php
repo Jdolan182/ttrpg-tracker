@@ -14,6 +14,11 @@ class User extends Authenticatable
     use HasFactory, Notifiable;
 
     /**
+     * How stat blocks show stats: "18 (+4)", "+4 (18)", or just "18".
+     */
+    public const STAT_DISPLAYS = ['score_modifier', 'modifier_score', 'score'];
+
+    /**
      * The attributes that are mass assignable.
      *
      * @var list<string>
@@ -22,6 +27,16 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'stat_display',
+    ];
+
+    /**
+     * Matches the column default, so a freshly created user has it before being reloaded.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'stat_display' => 'score_modifier',
     ];
 
     /**

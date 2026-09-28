@@ -34,6 +34,6 @@ class ImportGuestEncounter
             return null;
         }
 
-        return $user->encounters()->create(EncounterPayload::toAttributes($data));
+        return $user->encounters()->create(EncounterPayload::toAttributes($data, $user));
     }
 }

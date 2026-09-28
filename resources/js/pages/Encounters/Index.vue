@@ -4,13 +4,13 @@ import StatBlock from '@/components/StatBlock.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { byInitiative, combatantsFor, conditions } from '@/lib/encounter';
+import { byInitiative, combatantsFor, conditionIcon, conditions, normalizeSides, sideInfo, switchableSides } from '@/lib/encounter';
 import { readTracker, trackerStorageKey, writeTracker } from '@/lib/trackerStorage';
 import { plainCopy } from '@/lib/utils';
 import type { SharedData } from '@/types';
-import type { Combatant, Creature, Encounter } from '@/types/tracker';
+import type { Combatant, CombatantSide, Creature, Encounter } from '@/types/tracker';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
-import { ArrowLeft, ArrowRight, Download, FilePlus2, MonitorPlay, Plus, RotateCcw, Save, Trash2, X } from 'lucide-vue-next';
+import { ArrowLeft, ArrowRight, Download, FilePlus2, MonitorPlay, Plus, RotateCcw, Save, Trash2 } from 'lucide-vue-next';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 const props = defineProps<{
@@ -31,7 +31,6 @@ const round = ref(1);
 const activeIndex = ref(0);
 const selectedId = ref<string | null>(null);
 const amount = ref('');
-const conditionToAdd = ref('');
 const addOpen = ref(false);
 const saving = ref(false);
 const saveError = ref('');
@@ -47,6 +46,13 @@ const snapshotOf = (state: Pick<Encounter, 'name' | 'round' | 'activeIndex' | 'c
 const currentSnapshot = () => snapshotOf({ name: name.value, round: round.value, activeIndex: activeIndex.value, combatants: combatants.value });
 const savedSnapshot = ref('');
 const isDirty = computed(() => currentSnapshot() !== savedSnapshot.value);
+
+// A saved encounter as the tracker would show it: a plain copy, with sides filled in for older saves.
+const loadable = (encounter: Encounter): Encounter => {
+    const copy = plainCopy(encounter);
+    normalizeSides(copy.combatants, creaturesById.value);
+    return copy;
+};
 
 const resetView = () => {
     selectedId.value = null;
@@ -65,7 +71,7 @@ const startBlank = () => {
 };
 
 const openSaved = (encounter: Encounter) => {
-    const copy = plainCopy(encounter);
+    const copy = loadable(encounter);
     encounterId.value = copy.id;
     name.value = copy.name;
     combatants.value = copy.combatants;
@@ -88,10 +94,10 @@ const restoreTracker = (): boolean => {
     const saved = props.savedEncounters.find((e) => e.id === stored.encounterId);
     encounterId.value = saved ? saved.id : null;
     name.value = stored.name;
-    combatants.value = stored.combatants;
+    combatants.value = normalizeSides(stored.combatants, creaturesById.value);
     round.value = stored.round;
     activeIndex.value = stored.activeIndex;
-    savedSnapshot.value = saved ? snapshotOf(saved) : '';
+    savedSnapshot.value = saved ? snapshotOf(loadable(saved)) : '';
     return true;
 };
 
@@ -185,8 +191,8 @@ const sortKeepingTurn = () => {
     activeIndex.value = index === -1 ? 0 : index;
 };
 
-const addCombatants = (creature: Creature, count: number, initiative: number) => {
-    const added = combatantsFor(creature, count, initiative, combatants.value);
+const addCombatants = (creature: Creature, count: number, initiative: number, side: CombatantSide) => {
+    const added = combatantsFor(creature, count, initiative, combatants.value, side);
     combatants.value.push(...added);
     sortKeepingTurn();
     selectedId.value = added[0].id;
@@ -211,10 +217,13 @@ const removeCombatant = (combatant: Combatant) => {
     selectedId.value = null;
 };
 
-const isPlayer = (combatant: Combatant) => creaturesById.value.get(combatant.creatureId)?.kind === 'player';
+// Allies, neutrals and enemies can change sides mid-fight; player characters can't.
+const setSide = (combatant: Combatant, side: CombatantSide) => {
+    if (combatant.side !== 'player' && side !== 'player') combatant.side = side;
+};
 
-// Defeated monsters are skipped; players at 0 HP still get a turn (death saves, being revived).
-const isOut = (combatant: Combatant) => combatant.hp <= 0 && !isPlayer(combatant);
+// Defeated non-players are skipped; players at 0 HP still get a turn (death saves, being revived).
+const isOut = (combatant: Combatant) => combatant.hp <= 0 && combatant.side !== 'player';
 
 const step = (direction: 1 | -1) => {
     const count = combatants.value.length;
@@ -252,15 +261,10 @@ const onAmountKeydown = (event: KeyboardEvent) => {
     applyHp(event.shiftKey ? 1 : -1);
 };
 
-const addCondition = () => {
-    if (selected.value && conditionToAdd.value && !selected.value.conditions.includes(conditionToAdd.value)) {
-        selected.value.conditions.push(conditionToAdd.value);
-    }
-    conditionToAdd.value = '';
-};
-
-const removeCondition = (combatant: Combatant, condition: string) => {
-    combatant.conditions = combatant.conditions.filter((c) => c !== condition);
+const toggleCondition = (combatant: Combatant, condition: string) => {
+    combatant.conditions = combatant.conditions.includes(condition)
+        ? combatant.conditions.filter((c) => c !== condition)
+        : [...combatant.conditions, condition];
 };
 
 const hpPercent = (combatant: Combatant) => Math.round((combatant.hp / combatant.maxHp) * 100);
@@ -409,20 +413,28 @@ watch([encounterId, name, combatants, round, activeIndex], persistTracker, { dee
                         :class="[
                             index === activeIndex ? 'border-l-primary bg-accent/60' : 'border-l-transparent',
                             selected?.id === combatant.id && index !== activeIndex ? 'bg-accent/40' : '',
-                            isOut(combatant) ? 'text-muted-foreground line-through' : '',
+                            isOut(combatant) ? 'text-muted-foreground' : '',
                         ]"
                         @click="selectedId = combatant.id"
                     >
                         <span class="font-medium tabular-nums">{{ combatant.initiative }}</span>
                         <span class="flex min-w-0 flex-wrap items-center gap-1.5">
-                            <span class="truncate font-medium">{{ combatant.name }}</span>
-                            <span v-if="isPlayer(combatant)" class="text-xs text-muted-foreground no-underline">player</span>
                             <span
-                                v-for="condition in combatant.conditions"
-                                :key="condition"
-                                class="rounded bg-red-100 px-1.5 py-0.5 text-xs text-red-800 dark:bg-red-950 dark:text-red-300"
-                            >
-                                {{ condition }}
+                                class="size-2 shrink-0 rounded-full"
+                                :class="sideInfo(combatant.side).dot"
+                                :title="sideInfo(combatant.side).label"
+                                aria-hidden="true"
+                            />
+                            <span class="truncate font-medium" :class="isOut(combatant) ? 'line-through' : ''">{{ combatant.name }}</span>
+                            <span class="sr-only">({{ sideInfo(combatant.side).label }})</span>
+                            <span v-if="combatant.side !== 'enemy'" class="text-xs" :class="sideInfo(combatant.side).text">
+                                {{ sideInfo(combatant.side).label.toLowerCase() }}
+                            </span>
+                            <span v-if="combatant.conditions.length" class="flex items-center gap-0.5 text-red-600 dark:text-red-400">
+                                <span v-for="condition in combatant.conditions" :key="condition" :title="condition" role="img" :aria-label="condition">
+                                    <component :is="conditionIcon(condition)" v-if="conditionIcon(condition)" class="size-3.5" aria-hidden="true" />
+                                    <span v-else class="text-xs" aria-hidden="true">{{ condition }}</span>
+                                </span>
                             </span>
                         </span>
                         <span class="space-y-1">
@@ -479,28 +491,54 @@ watch([encounterId, name, combatants, round, activeIndex], persistTracker, { dee
                         </Button>
                     </div>
 
-                    <div class="flex flex-wrap items-center gap-2">
-                        <span
-                            v-for="condition in selected.conditions"
-                            :key="condition"
-                            class="inline-flex items-center gap-1 rounded bg-red-100 px-2 py-0.5 text-xs text-red-800 dark:bg-red-950 dark:text-red-300"
-                        >
-                            {{ condition }}
-                            <button type="button" :aria-label="`Remove ${condition}`" @click="removeCondition(selected, condition)">
-                                <X class="size-3" />
-                            </button>
+                    <!-- Side: players are fixed, everyone else can switch mid-fight -->
+                    <div class="flex flex-wrap items-center gap-2 text-sm">
+                        <span class="text-muted-foreground">Side</span>
+                        <span v-if="selected.side === 'player'" class="inline-flex items-center gap-1.5">
+                            <span class="size-2 rounded-full" :class="sideInfo('player').dot" aria-hidden="true" />
+                            Player character
                         </span>
-                        <select
-                            v-model="conditionToAdd"
-                            class="h-8 rounded-md border border-input bg-background px-2 text-xs"
-                            aria-label="Add condition"
-                            @change="addCondition"
-                        >
-                            <option value="">+ Condition</option>
-                            <option v-for="condition in conditions" :key="condition" :value="condition" :disabled="selected.conditions.includes(condition)">
-                                {{ condition }}
-                            </option>
-                        </select>
+                        <div v-else class="flex rounded-md border border-border p-0.5" role="group" aria-label="Side">
+                            <button
+                                v-for="option in switchableSides"
+                                :key="option.value"
+                                type="button"
+                                class="inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs transition-colors"
+                                :class="selected.side === option.value ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent'"
+                                :aria-pressed="selected.side === option.value"
+                                @click="setSide(selected, option.value)"
+                            >
+                                <span class="size-2 rounded-full" :class="option.dot" aria-hidden="true" />
+                                {{ option.label }}
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Conditions: one toggle per condition -->
+                    <div class="space-y-2">
+                        <p class="text-sm">
+                            <span class="text-muted-foreground">Conditions</span>
+                            <span v-if="selected.conditions.length" class="ml-1 font-medium">{{ selected.conditions.join(', ') }}</span>
+                        </p>
+                        <div class="flex flex-wrap gap-1.5" role="group" aria-label="Conditions">
+                            <button
+                                v-for="condition in conditions"
+                                :key="condition.name"
+                                type="button"
+                                class="inline-flex size-9 items-center justify-center rounded-md border transition-colors"
+                                :class="
+                                    selected.conditions.includes(condition.name)
+                                        ? 'border-red-500 bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300'
+                                        : 'border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                                "
+                                :title="condition.name"
+                                :aria-label="condition.name"
+                                :aria-pressed="selected.conditions.includes(condition.name)"
+                                @click="toggleCondition(selected, condition.name)"
+                            >
+                                <component :is="condition.icon" class="size-4" />
+                            </button>
+                        </div>
                     </div>
 
                     <StatBlock v-if="selectedCreature" :creature="selectedCreature" class="border-t border-border pt-4" />

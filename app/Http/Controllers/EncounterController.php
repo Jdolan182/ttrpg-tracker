@@ -31,7 +31,7 @@ class EncounterController extends Controller
 
     public function store(SaveEncounterRequest $request): RedirectResponse
     {
-        $encounter = $request->user()->encounters()->create(EncounterPayload::toAttributes($request->validated()));
+        $encounter = $request->user()->encounters()->create(EncounterPayload::toAttributes($request->validated(), $request->user()));
 
         return to_route('encounters.index')->with('savedEncounterId', $encounter->id);
     }
@@ -40,7 +40,7 @@ class EncounterController extends Controller
     {
         Gate::authorize('update', $encounter);
 
-        $encounter->update(EncounterPayload::toAttributes($request->validated()));
+        $encounter->update(EncounterPayload::toAttributes($request->validated(), $request->user()));
 
         return to_route('encounters.index')->with('savedEncounterId', $encounter->id);
     }

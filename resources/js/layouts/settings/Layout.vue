@@ -18,6 +18,10 @@ const sidebarNavItems: NavItem[] = [
         title: 'Appearance',
         href: '/settings/appearance',
     },
+    {
+        title: 'Display',
+        href: '/settings/display',
+    },
 ];
 
 const currentPath = window.location.pathname;

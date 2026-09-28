@@ -3,7 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import type { Creature } from '@/types/tracker';
+import { defaultSide, switchableSides } from '@/lib/encounter';
+import type { CombatantSide, Creature } from '@/types/tracker';
 import { Search } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 
@@ -14,13 +15,14 @@ const props = defineProps<{
 const open = defineModel<boolean>('open', { required: true });
 
 const emit = defineEmits<{
-    add: [creature: Creature, count: number, initiative: number];
+    add: [creature: Creature, count: number, initiative: number, side: CombatantSide];
 }>();
 
 const search = ref('');
 const selectedId = ref<number | null>(null);
 const count = ref<number | string>(1);
 const initiative = ref<number | string>('');
+const side = ref<CombatantSide>('enemy');
 const error = ref('');
 
 const results = computed(() => {
@@ -29,6 +31,7 @@ const results = computed(() => {
 });
 
 const selected = computed(() => props.creatures.find((c) => c.id === selectedId.value));
+const isPlayer = computed(() => selected.value?.kind === 'player');
 
 // Start clean each time the dialog opens.
 watch(open, (isOpen) => {
@@ -37,7 +40,13 @@ watch(open, (isOpen) => {
     selectedId.value = null;
     count.value = 1;
     initiative.value = '';
+    side.value = 'enemy';
     error.value = '';
+});
+
+// Picking a creature suggests its usual side; the DM can still change it (except for players).
+watch(selected, (creature) => {
+    if (creature) side.value = defaultSide(creature);
 });
 
 const submit = () => {
@@ -57,7 +66,7 @@ const submit = () => {
         return;
     }
 
-    emit('add', selected.value, howMany, init);
+    emit('add', selected.value, howMany, init, side.value);
     open.value = false;
 };
 </script>
@@ -100,7 +109,7 @@ const submit = () => {
                     <p v-if="results.length === 0" class="px-3 py-6 text-center text-sm text-muted-foreground">No creatures match that search.</p>
                 </div>
 
-                <div class="grid grid-cols-2 gap-3">
+                <div class="grid grid-cols-3 gap-3">
                     <div class="grid gap-1.5">
                         <Label for="combatant-count">How many</Label>
                         <Input id="combatant-count" v-model="count" type="number" min="1" max="20" />
@@ -108,6 +117,18 @@ const submit = () => {
                     <div class="grid gap-1.5">
                         <Label for="combatant-initiative">Initiative</Label>
                         <Input id="combatant-initiative" v-model="initiative" type="number" placeholder="0" />
+                    </div>
+                    <div class="grid gap-1.5">
+                        <Label for="combatant-side">Side</Label>
+                        <select
+                            v-if="!isPlayer"
+                            id="combatant-side"
+                            v-model="side"
+                            class="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                        >
+                            <option v-for="option in switchableSides" :key="option.value" :value="option.value">{{ option.label }}</option>
+                        </select>
+                        <p v-else id="combatant-side" class="flex h-10 items-center text-sm text-muted-foreground">Player</p>
                     </div>
                 </div>
 

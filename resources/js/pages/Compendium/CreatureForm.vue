@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { useStatDisplay } from '@/composables/useStatDisplay';
+import { formatModifier, modifier } from '@/lib/stats';
 import { plainCopy } from '@/lib/utils';
 import type { Creature, CreatureEntry, CreatureKind, CreatureStat } from '@/types/tracker';
 import { Head, Link, useForm } from '@inertiajs/vue3';
@@ -46,6 +48,14 @@ const submit = () => {
     } else {
         form.post(route('creatures.store'), { preserveScroll: true });
     }
+};
+
+const statDisplay = useStatDisplay();
+
+// Live modifier next to each stat value while editing; blank until the value is a whole number.
+const modifierHint = (value: number | string) => {
+    const score = Number(value);
+    return value !== '' && Number.isInteger(score) ? formatModifier(modifier(score)) : '';
 };
 
 // Errors for list fields come back keyed by position, e.g. "stats.2.label".
@@ -125,6 +135,9 @@ const textareaClass =
                         <div class="flex items-center gap-2">
                             <Input v-model="stat.label" maxlength="20" required class="flex-1" :aria-label="`Stat ${index + 1} name`" />
                             <Input v-model="stat.value" type="number" required class="w-24" :aria-label="`Stat ${index + 1} value`" />
+                            <span v-if="statDisplay !== 'score'" class="w-8 text-sm tabular-nums text-muted-foreground" aria-live="polite">
+                                {{ modifierHint(stat.value) }}
+                            </span>
                             <Button type="button" variant="ghost" size="icon" :aria-label="`Remove ${stat.label || 'stat'}`" @click="form.stats.splice(index, 1)">
                                 <X />
                             </Button>
