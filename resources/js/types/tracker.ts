@@ -1,3 +1,5 @@
+import type { LogEntry } from '@/lib/combatLog';
+
 export type CreatureKind = 'monster' | 'npc' | 'player';
 
 export type CreatureSource = 'srd' | 'homebrew';
@@ -10,6 +12,15 @@ export interface CreatureStat {
 export interface CreatureEntry {
     name: string;
     description: string;
+}
+
+// When a limited action's uses come back. Mirrors Creature::LIMIT_PERIODS.
+export type LimitPeriod = 'turn' | 'round' | 'encounter' | 'day';
+
+export interface CreatureAction extends CreatureEntry {
+    // Null when the action can be used any number of times.
+    uses: number | null;
+    per: LimitPeriod | null;
 }
 
 // Mirrors App\Models\Creature::toFrontend().
@@ -28,7 +39,7 @@ export interface Creature {
     // Ordered so each game system can define its own stats.
     stats: CreatureStat[];
     traits: CreatureEntry[];
-    actions: CreatureEntry[];
+    actions: CreatureAction[];
 }
 
 export type CombatantSide = 'player' | 'ally' | 'neutral' | 'enemy';
@@ -44,13 +55,23 @@ export interface Combatant {
     maxHp: number;
     ac: number;
     conditions: string[];
+    // Times each limited action has been used, keyed by action name.
+    used: Record<string, number>;
+}
+
+// A saved encounter in the tracker's list; the full thing is loaded when it's opened.
+export interface EncounterSummary {
+    id: number;
+    name: string;
 }
 
 // Mirrors App\Models\Encounter::toFrontend().
 export interface Encounter {
     id: number;
     name: string;
+    // 0 while setting up, before combat starts.
     round: number;
     activeIndex: number;
     combatants: Combatant[];
+    log: LogEntry[];
 }

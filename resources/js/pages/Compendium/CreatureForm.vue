@@ -3,13 +3,21 @@ import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import AppLayout from '@/layouts/AppLayout.vue';
 import { useStatDisplay } from '@/composables/useStatDisplay';
+import AppLayout from '@/layouts/AppLayout.vue';
+import { limitPeriods } from '@/lib/encounter';
 import { formatModifier, modifier } from '@/lib/stats';
 import { plainCopy } from '@/lib/utils';
-import type { Creature, CreatureEntry, CreatureKind, CreatureStat } from '@/types/tracker';
+import type { Creature, CreatureEntry, CreatureKind, CreatureStat, LimitPeriod } from '@/types/tracker';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { ArrowLeft, Plus, X } from 'lucide-vue-next';
+
+// An action as edited: `uses` is '' while blank (unlimited), and `per` is kept even then so it's
+// remembered if a limit is typed back in.
+interface ActionForm extends CreatureEntry {
+    uses: number | string;
+    per: LimitPeriod;
+}
 
 const props = defineProps<{
     // The creature being edited, or null when creating.
@@ -33,8 +41,20 @@ const form = useForm({
     speed: base?.speed ?? '30 ft.',
     stats: plainCopy(base?.stats ?? defaultStats),
     traits: plainCopy(base?.traits ?? []) as CreatureEntry[],
-    actions: plainCopy(base?.actions ?? []) as CreatureEntry[],
+    actions: plainCopy(base?.actions ?? []).map(
+        (action): ActionForm => ({ name: action.name, description: action.description, uses: action.uses ?? '', per: action.per ?? 'day' }),
+    ),
 });
+
+const addEntry = (list: 'traits' | 'actions') => {
+    if (list === 'actions') form.actions.push({ name: '', description: '', uses: '', per: 'day' });
+    else form.traits.push({ name: '', description: '' });
+};
+
+const entryError = (list: 'traits' | 'actions', index: number) =>
+    listError(list, index, 'name') ??
+    listError(list, index, 'description') ??
+    (list === 'actions' ? (listError(list, index, 'uses') ?? listError(list, index, 'per')) : undefined);
 
 const kindOptions: { value: CreatureKind; label: string }[] = [
     { value: 'monster', label: 'Monster' },
@@ -43,10 +63,20 @@ const kindOptions: { value: CreatureKind; label: string }[] = [
 ];
 
 const submit = () => {
+    // A blank limit means unlimited: send no period with it.
+    const withLimits = form.transform((data) => ({
+        ...data,
+        actions: data.actions.map((action) => ({
+            ...action,
+            uses: action.uses === '' ? null : action.uses,
+            per: action.uses === '' ? null : action.per,
+        })),
+    }));
+
     if (props.creature) {
-        form.put(route('creatures.update', props.creature.id), { preserveScroll: true });
+        withLimits.put(route('creatures.update', props.creature.id), { preserveScroll: true });
     } else {
-        form.post(route('creatures.store'), { preserveScroll: true });
+        withLimits.post(route('creatures.store'), { preserveScroll: true });
     }
 };
 
@@ -138,7 +168,13 @@ const textareaClass =
                             <span v-if="statDisplay !== 'score'" class="w-8 text-sm tabular-nums text-muted-foreground" aria-live="polite">
                                 {{ modifierHint(stat.value) }}
                             </span>
-                            <Button type="button" variant="ghost" size="icon" :aria-label="`Remove ${stat.label || 'stat'}`" @click="form.stats.splice(index, 1)">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                :aria-label="`Remove ${stat.label || 'stat'}`"
+                                @click="form.stats.splice(index, 1)"
+                            >
                                 <X />
                             </Button>
                         </div>
@@ -168,7 +204,13 @@ const textareaClass =
                             :placeholder="list === 'traits' ? 'Pack Tactics' : 'Scimitar'"
                             :aria-label="`${list === 'traits' ? 'Trait' : 'Action'} ${index + 1} name`"
                         />
-                        <Button type="button" variant="ghost" size="icon" :aria-label="`Remove ${entry.name || 'entry'}`" @click="form[list].splice(index, 1)">
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            :aria-label="`Remove ${entry.name || 'entry'}`"
+                            @click="form[list].splice(index, 1)"
+                        >
                             <X />
                         </Button>
                     </div>
@@ -177,12 +219,39 @@ const textareaClass =
                         maxlength="2000"
                         required
                         :class="textareaClass"
-                        :placeholder="list === 'traits' ? 'Advantage on attacks when an ally is within 5 ft.' : 'Melee attack: +4 to hit. Hit: 5 (1d6 + 2) slashing damage.'"
+                        :placeholder="
+                            list === 'traits'
+                                ? 'Advantage on attacks when an ally is within 5 ft.'
+                                : 'Melee attack: +4 to hit. Hit: 5 (1d6 + 2) slashing damage.'
+                        "
                         :aria-label="`${list === 'traits' ? 'Trait' : 'Action'} ${index + 1} description`"
                     />
-                    <InputError :message="listError(list, index, 'name') ?? listError(list, index, 'description')" />
+                    <!-- Optional limit on how often an action can be used, e.g. 3 per day -->
+                    <div v-if="list === 'actions'" class="flex flex-wrap items-center gap-2 text-sm">
+                        <span class="text-muted-foreground">Limited to</span>
+                        <Input
+                            v-model="form.actions[index].uses"
+                            type="number"
+                            min="1"
+                            max="99"
+                            placeholder="∞"
+                            class="h-8 w-16 text-center"
+                            :aria-label="`Action ${index + 1} uses (leave blank for unlimited)`"
+                        />
+                        <span class="text-muted-foreground">uses</span>
+                        <select
+                            v-model="form.actions[index].per"
+                            class="h-8 rounded-md border border-input bg-background px-2 text-sm disabled:opacity-50"
+                            :disabled="form.actions[index].uses === ''"
+                            :aria-label="`Action ${index + 1} limit period`"
+                        >
+                            <option v-for="period in limitPeriods" :key="period.value" :value="period.value">{{ period.label }}</option>
+                        </select>
+                        <span v-if="form.actions[index].uses === ''" class="text-xs text-muted-foreground">Leave blank for unlimited.</span>
+                    </div>
+                    <InputError :message="entryError(list, index)" />
                 </div>
-                <Button type="button" variant="outline" size="sm" @click="form[list].push({ name: '', description: '' })">
+                <Button type="button" variant="outline" size="sm" @click="addEntry(list)">
                     <Plus />
                     {{ list === 'traits' ? 'Add trait' : 'Add action' }}
                 </Button>

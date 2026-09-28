@@ -21,6 +21,16 @@ class Encounter extends Model
         'round',
         'active_index',
         'combatants',
+        'log',
+    ];
+
+    /**
+     * Matches the column default, so a new encounter has an empty history before being reloaded.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'log' => '[]',
     ];
 
     /**
@@ -34,6 +44,7 @@ class Encounter extends Model
             'round' => 'integer',
             'active_index' => 'integer',
             'combatants' => 'array',
+            'log' => 'array',
         ];
     }
 
@@ -55,6 +66,7 @@ class Encounter extends Model
             'round' => $this->round,
             'activeIndex' => $this->active_index,
             'combatants' => $this->combatants,
+            'log' => $this->log ?? [],
         ];
     }
 }

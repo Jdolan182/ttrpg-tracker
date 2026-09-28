@@ -52,7 +52,52 @@ class CreatureTest extends TestCase
         $this->assertSame(18, $creature->hp);
         // Order and integer values survive the round trip through jsonb.
         $this->assertSame([['label' => 'Might', 'value' => 8], ['label' => 'Wits', 'value' => 16]], $creature->stats);
-        $this->assertSame([['name' => 'Hex Bolt', 'description' => 'Ranged spell attack: +5 to hit. Hit: 7 necrotic damage.']], $creature->actions);
+        // assertEquals, not assertSame: jsonb stores object keys in its own order.
+        $this->assertEquals([[
+            'name' => 'Hex Bolt',
+            'description' => 'Ranged spell attack: +5 to hit. Hit: 7 necrotic damage.',
+            'uses' => null,
+            'per' => null,
+        ]], $creature->actions);
+    }
+
+    public function test_actions_can_have_a_usage_limit()
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->post('/compendium', $this->payload(['actions' => [
+            ['name' => 'Hex Bolt', 'description' => 'Zap.', 'uses' => '3', 'per' => 'day'],
+            ['name' => 'Legendary Swipe', 'description' => 'Swipe.', 'uses' => 1, 'per' => 'round'],
+            // A period without a count is dropped: the action is unlimited.
+            ['name' => 'Bite', 'description' => 'Chomp.', 'uses' => null, 'per' => 'turn'],
+        ]]))->assertSessionHasNoErrors();
+
+        $actions = $user->creatures()->sole()->actions;
+        $this->assertSame([3, 'day'], [$actions[0]['uses'], $actions[0]['per']]);
+        $this->assertSame([1, 'round'], [$actions[1]['uses'], $actions[1]['per']]);
+        $this->assertSame([null, null], [$actions[2]['uses'], $actions[2]['per']]);
+    }
+
+    public function test_action_limits_and_names_are_validated()
+    {
+        $this->actingAs(User::factory()->create())
+            ->post('/compendium', $this->payload(['actions' => [
+                ['name' => 'Bite', 'description' => 'Chomp.', 'uses' => 0, 'per' => 'day'],
+                ['name' => 'bite', 'description' => 'Chomp again.'],
+                ['name' => 'Roar', 'description' => 'Loud.', 'uses' => 2, 'per' => 'fortnight'],
+                ['name' => 'Stomp', 'description' => 'Thud.', 'uses' => 2],
+            ]]))
+            ->assertSessionHasErrors(['actions.0.uses', 'actions.1.name', 'actions.2.per', 'actions.3.per']);
+    }
+
+    public function test_actions_saved_before_limits_existed_read_as_unlimited()
+    {
+        $creature = Creature::factory()->srd()->create(['actions' => [['name' => 'Slam', 'description' => 'Thud.']]]);
+
+        $this->get('/compendium')->assertInertia(fn ($page) => $page
+            ->where('creatures.0.id', $creature->id)
+            ->where('creatures.0.actions.0.uses', null)
+            ->where('creatures.0.actions.0.per', null));
     }
 
     public function test_creating_a_creature_redirects_to_it_in_the_compendium()

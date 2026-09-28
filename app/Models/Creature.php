@@ -14,6 +14,10 @@ class Creature extends Model
 
     public const KINDS = ['monster', 'npc', 'player'];
 
+    // When a limited action's uses come back: at the start of its turn, each round, or not until
+    // the encounter is reset ("encounter" and "day" behave the same inside one fight).
+    public const LIMIT_PERIODS = ['turn', 'round', 'encounter', 'day'];
+
     /**
      * The attributes that are mass assignable.
      *
@@ -87,7 +91,13 @@ class Creature extends Model
             'speed' => $this->speed,
             'stats' => $this->stats,
             'traits' => $this->traits,
-            'actions' => $this->actions,
+            // Actions saved before limits existed have no uses/per; treat them as unlimited.
+            'actions' => array_map(fn (array $action) => [
+                'name' => $action['name'],
+                'description' => $action['description'],
+                'uses' => $action['uses'] ?? null,
+                'per' => $action['per'] ?? null,
+            ], $this->actions),
         ];
     }
 }

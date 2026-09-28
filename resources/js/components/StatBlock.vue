@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { useStatDisplay } from '@/composables/useStatDisplay';
+import { limitLabel } from '@/lib/encounter';
 import { statParts } from '@/lib/stats';
 import type { Creature } from '@/types/tracker';
 
 defineProps<{
     creature: Creature;
+    // The tracker shows actions itself, with Use buttons.
+    hideActions?: boolean;
 }>();
 
 const statDisplay = useStatDisplay();
@@ -51,10 +54,12 @@ const statDisplay = useStatDisplay();
             </p>
         </section>
 
-        <section v-if="creature.actions.length" class="space-y-2 border-t border-border pt-3">
+        <section v-if="creature.actions.length && !hideActions" class="space-y-2 border-t border-border pt-3">
             <h3 class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Actions</h3>
             <p v-for="action in creature.actions" :key="action.name">
-                <span class="font-medium italic">{{ action.name }}.</span>
+                <span class="font-medium italic"
+                    >{{ action.name }}<template v-if="action.uses"> ({{ limitLabel(action) }})</template>.</span
+                >
                 {{ action.description }}
             </p>
         </section>

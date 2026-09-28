@@ -11,6 +11,7 @@
     },
     "devDependencies": {
         "@eslint/js": "^9.19.0",
+        "@types/sortablejs": "^1.15.9",
         "@vue/eslint-config-typescript": "^14.3.0",
         "eslint": "^9.17.0",
         "eslint-config-prettier": "^10.0.1",
@@ -45,6 +46,7 @@
         "typescript": "^5.2.2",
         "vite": "^6.0.3",
         "vue": "^3.5.13",
+        "vue-draggable-plus": "^0.6.1",
         "vue-tsc": "^2.2.0",
         "ziggy-js": "^2.4.2"
     },

@@ -80,6 +80,97 @@ class EncounterTest extends TestCase
         $this->assertDatabaseHas('encounters', ['name' => 'Prep']);
     }
 
+    public function test_the_history_and_action_uses_are_saved()
+    {
+        $user = User::factory()->create();
+        $goblin = Creature::factory()->srd()->create();
+
+        $payload = $this->payload($goblin);
+        $payload['combatants'][0]['used'] = ['Scimitar' => 2, 'Unused' => 0];
+        $payload['log'] = [
+            ['id' => 'l1', 'at' => '2026-09-28T16:00:00Z', 'round' => 1, 'type' => 'turn', 'actor' => 'Goblin 1'],
+            [
+                'id' => 'l2', 'at' => '2026-09-28T16:00:05Z', 'round' => 1, 'type' => 'action', 'actor' => 'Goblin 1',
+                'detail' => 'Scimitar', 'targets' => ['Goblin 2'], 'amount' => 5, 'effect' => 'damage', 'sneaky' => 'dropped',
+            ],
+        ];
+
+        $this->actingAs($user)->post('/encounters', $payload)->assertSessionHasNoErrors();
+
+        $encounter = $user->encounters()->sole();
+        $this->assertSame(['Scimitar' => 2], $encounter->combatants[0]['used']);
+        $this->assertSame([], $encounter->combatants[1]['used']);
+        $this->assertCount(2, $encounter->log);
+        // Unknown keys are dropped (jsonb keeps its own key order, hence canonicalizing).
+        $this->assertEqualsCanonicalizing(['id', 'at', 'round', 'type', 'actor', 'targets', 'amount', 'effect', 'detail'], array_keys($encounter->log[1]));
+        $this->assertSame('Scimitar', $encounter->log[1]['detail']);
+
+        $this->get('/')->assertInertia(fn ($page) => $page->has('openEncounter.log', 2));
+    }
+
+    public function test_history_entries_are_validated()
+    {
+        $goblin = Creature::factory()->srd()->create();
+        $this->actingAs(User::factory()->create());
+
+        $badType = $this->payload($goblin, ['log' => [['id' => 'x', 'at' => '2026-09-28T16:00:00Z', 'round' => 1, 'type' => 'fireworks']]]);
+        $this->post('/encounters', $badType)->assertSessionHasErrors('log.0.type');
+
+        $tooMany = $this->payload($goblin, ['log' => array_fill(0, 1001, ['id' => 'x', 'at' => '2026-09-28T16:00:00Z', 'round' => 1, 'type' => 'turn'])]);
+        $this->post('/encounters', $tooMany)->assertSessionHasErrors('log');
+
+        $this->assertDatabaseCount('encounters', 0);
+    }
+
+    public function test_encounters_saved_before_the_history_existed_have_an_empty_one()
+    {
+        $user = User::factory()->create();
+        Encounter::factory()->for($user)->create();
+
+        $this->actingAs($user)->get('/')->assertInertia(fn ($page) => $page->where('openEncounter.log', []));
+    }
+
+    public function test_the_list_only_has_names_and_one_encounter_is_sent_in_full()
+    {
+        $user = User::factory()->create();
+        $older = Encounter::factory()->for($user)->create(['name' => 'Older', 'updated_at' => now()->subDay()]);
+        $newer = Encounter::factory()->for($user)->create(['name' => 'Newer']);
+
+        $this->actingAs($user)->get('/')->assertInertia(fn ($page) => $page
+            ->where('savedEncounters', [['id' => $newer->id, 'name' => 'Newer'], ['id' => $older->id, 'name' => 'Older']])
+            // Without ?encounter=, the most recently updated one is sent in full.
+            ->where('openEncounter.id', $newer->id)
+            ->has('openEncounter.combatants')
+            ->has('openEncounter.log'));
+
+        $this->get("/?encounter={$older->id}")->assertInertia(fn ($page) => $page->where('openEncounter.id', $older->id));
+    }
+
+    public function test_another_users_encounter_cannot_be_opened()
+    {
+        $user = User::factory()->create();
+        $theirs = Encounter::factory()->create();
+
+        $this->actingAs($user)->get("/?encounter={$theirs->id}")->assertInertia(fn ($page) => $page->where('openEncounter', null));
+
+        auth()->logout();
+        $this->get("/?encounter={$theirs->id}")->assertInertia(fn ($page) => $page->where('openEncounter', null));
+    }
+
+    public function test_an_encounter_can_be_saved_before_combat_starts()
+    {
+        $user = User::factory()->create();
+        $goblin = Creature::factory()->srd()->create();
+
+        $this->actingAs($user)
+            ->post('/encounters', $this->payload($goblin, ['round' => 0, 'activeIndex' => 0]))
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(0, $user->encounters()->sole()->round);
+
+        $this->post('/encounters', $this->payload($goblin, ['round' => -1]))->assertSessionHasErrors('round');
+    }
+
     public function test_guests_cannot_save_encounters()
     {
         $goblin = Creature::factory()->srd()->create();

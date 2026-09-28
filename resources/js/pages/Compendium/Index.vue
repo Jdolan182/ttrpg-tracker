@@ -3,7 +3,8 @@ import StatBlock from '@/components/StatBlock.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { byInitiative, combatantsFor } from '@/lib/encounter';
+import { logEntry } from '@/lib/combatLog';
+import { combatantsFor, insertByInitiative } from '@/lib/encounter';
 import { readTracker, trackerStorageKey, writeTracker } from '@/lib/trackerStorage';
 import type { SharedData } from '@/types';
 import type { Creature, CreatureKind, CreatureSource } from '@/types/tracker';
@@ -59,12 +60,28 @@ const filterButtonClass = (active: boolean) =>
 // Adds one of this creature to the encounter currently open in the tracker (kept in this browser).
 const addToEncounter = (creature: Creature) => {
     const key = trackerStorageKey(user?.id ?? null);
-    const tracker = readTracker(key) ?? { version: 2 as const, encounterId: null, name: 'Untitled encounter', combatants: [], round: 1, activeIndex: 0 };
+    const tracker = readTracker(key) ?? {
+        version: 2 as const,
+        encounterId: null,
+        name: 'Untitled encounter',
+        combatants: [],
+        round: 0,
+        activeIndex: 0,
+        log: [],
+    };
 
+    // Rolled initiative, slotted into the existing order without re-sorting anyone else.
     const activeId = tracker.combatants[tracker.activeIndex]?.id;
-    tracker.combatants.push(...combatantsFor(creature, 1, 0, tracker.combatants));
-    tracker.combatants.sort(byInitiative);
-    tracker.activeIndex = Math.max(0, tracker.combatants.findIndex((c) => c.id === activeId));
+    const added = combatantsFor(creature, 1, null, tracker.combatants);
+    insertByInitiative(tracker.combatants, added);
+    tracker.activeIndex = Math.max(
+        0,
+        tracker.combatants.findIndex((c) => c.id === activeId),
+    );
+    // Arriving mid-fight goes in the history, as it would when added from the tracker.
+    if (tracker.round > 0) {
+        tracker.log.push(logEntry(tracker.round, { type: 'joined', targets: [added[0].name], amount: added[0].initiative }));
+    }
 
     writeTracker(key, tracker);
     notice.value = `Added ${creature.name} to "${tracker.name}".`;

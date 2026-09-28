@@ -42,7 +42,10 @@ const choose = (value: StatDisplay) => {
 
         <SettingsLayout>
             <div class="space-y-6">
-                <HeadingSmall title="Stat display" description="How stats appear on stat blocks. Modifiers use the d20 rule: every 2 points above 10 is +1." />
+                <HeadingSmall
+                    title="Stat display"
+                    description="How stats appear on stat blocks. Modifiers use the d20 rule: every 2 points above 10 is +1."
+                />
 
                 <div class="grid gap-3" role="radiogroup" aria-label="Stat display">
                     <button
@@ -60,7 +63,11 @@ const choose = (value: StatDisplay) => {
                             <span class="block text-sm text-muted-foreground">{{ option.example }}</span>
                         </span>
                         <span class="flex shrink-0 gap-1.5" aria-hidden="true">
-                            <span v-for="stat in preview" :key="stat.label" class="w-16 rounded-md border border-border px-2 py-1 text-center text-sm">
+                            <span
+                                v-for="stat in preview"
+                                :key="stat.label"
+                                class="w-16 rounded-md border border-border px-2 py-1 text-center text-sm"
+                            >
                                 <span class="block text-xs text-muted-foreground">{{ stat.label }}</span>
                                 <span class="font-medium">{{ statParts(stat.value, option.value).main }}</span>
                                 <span v-if="statParts(stat.value, option.value).extra" class="ml-0.5 text-xs text-muted-foreground">

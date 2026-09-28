@@ -28,8 +28,12 @@ class SaveCreatureRequest extends FormRequest
             'traits.*.name' => ['required', 'string', 'max:100'],
             'traits.*.description' => ['required', 'string', 'max:2000'],
             'actions' => ['present', 'array', 'max:50'],
-            'actions.*.name' => ['required', 'string', 'max:100'],
+            // Names identify actions when counting uses in a fight, so they must be unique.
+            'actions.*.name' => ['required', 'string', 'max:100', 'distinct:ignore_case'],
             'actions.*.description' => ['required', 'string', 'max:2000'],
+            // Optional limit, e.g. 3 uses per day. Blank uses means unlimited.
+            'actions.*.uses' => ['nullable', 'integer', 'min:1', 'max:99'],
+            'actions.*.per' => ['nullable', 'required_with:actions.*.uses', Rule::in(Creature::LIMIT_PERIODS)],
         ];
     }
 
@@ -40,6 +44,8 @@ class SaveCreatureRequest extends FormRequest
     {
         return [
             'stats.*.label.distinct' => 'Each stat needs a different name.',
+            'actions.*.name.distinct' => 'Each action needs a different name.',
+            'actions.*.per.required_with' => 'Choose how often the uses reset.',
         ];
     }
 
@@ -68,7 +74,12 @@ class SaveCreatureRequest extends FormRequest
             // Form inputs send numbers as strings; store real integers in the JSON.
             'stats' => array_map(fn (array $stat) => ['label' => $stat['label'], 'value' => (int) $stat['value']], $data['stats']),
             'traits' => $entries($data['traits']),
-            'actions' => $entries($data['actions']),
+            'actions' => array_map(fn (array $action) => [
+                'name' => $action['name'],
+                'description' => $action['description'],
+                'uses' => isset($action['uses']) ? (int) $action['uses'] : null,
+                'per' => isset($action['uses']) ? $action['per'] : null,
+            ], $data['actions']),
         ];
     }
 }

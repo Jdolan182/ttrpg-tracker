@@ -15,7 +15,8 @@ const props = defineProps<{
 const open = defineModel<boolean>('open', { required: true });
 
 const emit = defineEmits<{
-    add: [creature: Creature, count: number, initiative: number, side: CombatantSide];
+    // A null initiative means roll it (monsters and NPCs) or 0 for players to fill in.
+    add: [creature: Creature, count: number, initiative: number | null, side: CombatantSide];
 }>();
 
 const search = ref('');
@@ -51,7 +52,7 @@ watch(selected, (creature) => {
 
 const submit = () => {
     const howMany = Number(count.value);
-    const init = initiative.value === '' ? 0 : Number(initiative.value);
+    const init = initiative.value === '' ? null : Number(initiative.value);
 
     if (!selected.value) {
         error.value = 'Choose a creature to add.';
@@ -61,7 +62,7 @@ const submit = () => {
         error.value = 'Add between 1 and 20 at a time.';
         return;
     }
-    if (!Number.isInteger(init) || init < -100 || init > 1000) {
+    if (init !== null && (!Number.isInteger(init) || init < -100 || init > 1000)) {
         error.value = 'Initiative must be a whole number.';
         return;
     }
@@ -76,7 +77,9 @@ const submit = () => {
         <DialogContent class="max-w-lg">
             <DialogHeader>
                 <DialogTitle>Add combatant</DialogTitle>
-                <DialogDescription>Pick a creature from your compendium. You can change each one's initiative afterwards.</DialogDescription>
+                <DialogDescription>
+                    Pick a creature from your compendium. Leave initiative blank to roll it; you can change it afterwards.
+                </DialogDescription>
             </DialogHeader>
 
             <form class="space-y-4" @submit.prevent="submit">
@@ -116,7 +119,13 @@ const submit = () => {
                     </div>
                     <div class="grid gap-1.5">
                         <Label for="combatant-initiative">Initiative</Label>
-                        <Input id="combatant-initiative" v-model="initiative" type="number" placeholder="0" />
+                        <Input
+                            id="combatant-initiative"
+                            v-model="initiative"
+                            type="number"
+                            :placeholder="isPlayer ? 'Their roll' : 'Roll'"
+                            :title="isPlayer ? 'Leave blank to enter it later' : 'Leave blank to roll d20 + DEX'"
+                        />
                     </div>
                     <div class="grid gap-1.5">
                         <Label for="combatant-side">Side</Label>

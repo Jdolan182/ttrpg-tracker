@@ -30,6 +30,7 @@ const submit = () => {
                   round: guestTracker.round,
                   activeIndex: guestTracker.activeIndex,
                   combatants: guestTracker.combatants,
+                  log: guestTracker.log,
               }
             : null,
     })).post(route('register'), {

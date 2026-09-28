@@ -16,16 +16,32 @@ class EncounterController extends Controller
 {
     /**
      * Show the encounter tracker. Guests can run encounters with SRD creatures but can't save them.
+     *
+     * Saved encounters are listed by name only; just one is sent in full (combatants and history):
+     * the one asked for with ?encounter={id}, or else the most recently updated. Props are closures
+     * so switching encounters can reload only `openEncounter`.
      */
     public function index(Request $request): Response
     {
         $user = $request->user();
 
         return Inertia::render('Encounters/Index', [
-            'savedEncounters' => $user
-                ? $user->encounters()->latest('updated_at')->get()->map->toFrontend()
+            'savedEncounters' => fn () => $user
+                ? $user->encounters()->latest('updated_at')->get(['id', 'name'])->map(fn (Encounter $e) => ['id' => $e->id, 'name' => $e->name])
                 : [],
-            'creatures' => Creature::visibleTo($user)->orderBy('name')->get()->map->toFrontend(),
+            'openEncounter' => function () use ($request, $user) {
+                if (! $user) {
+                    return null;
+                }
+
+                $encounters = $user->encounters();
+                $encounter = $request->filled('encounter')
+                    ? $encounters->find($request->integer('encounter'))
+                    : $encounters->latest('updated_at')->first();
+
+                return $encounter?->toFrontend();
+            },
+            'creatures' => fn () => Creature::visibleTo($user)->orderBy('name')->get()->map->toFrontend(),
         ]);
     }
 
