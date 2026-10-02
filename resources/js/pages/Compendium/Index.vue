@@ -151,7 +151,7 @@ const deleteCreature = (creature: Creature) => {
 
             <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
                 <!-- Results -->
-                <div class="overflow-hidden rounded-lg border border-border bg-card">
+                <div class="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
                     <p class="border-b border-border px-4 py-2 text-xs text-muted-foreground">
                         {{ results.length }} {{ results.length === 1 ? 'creature' : 'creatures' }}
                     </p>
@@ -182,7 +182,7 @@ const deleteCreature = (creature: Creature) => {
                 </div>
 
                 <!-- Detail -->
-                <div v-if="selected" class="space-y-4 rounded-lg border border-border bg-card p-4">
+                <div v-if="selected" class="space-y-4 rounded-xl border border-border bg-card p-4 shadow-sm">
                     <div class="flex flex-wrap items-center gap-2">
                         <h2 class="mr-auto text-lg font-semibold">{{ selected.name }}</h2>
                         <Button variant="outline" size="sm" @click="addToEncounter(selected)">

@@ -56,6 +56,22 @@ class GuestEncounterImportTest extends TestCase
         $this->assertSame(['Poisoned'], $encounter->combatants[0]['conditions']);
     }
 
+    public function test_a_guests_quick_added_players_come_across_too()
+    {
+        $guest = $this->guestEncounter();
+        $guest['combatants'][] = [
+            'id' => 'q1', 'creatureId' => null, 'name' => 'Kestrel', 'side' => 'player',
+            'initiative' => 12, 'hp' => 30, 'maxHp' => 33, 'ac' => 13, 'conditions' => [],
+        ];
+
+        $this->post('/register', $this->registration(['guest_encounter' => $guest]));
+
+        $combatants = $this->newUser()->encounters()->sole()->combatants;
+        $this->assertSame('Kestrel', $combatants[2]['name']);
+        $this->assertNull($combatants[2]['creatureId']);
+        $this->assertSame(30, $combatants[2]['hp']);
+    }
+
     public function test_registration_without_a_guest_fight_creates_no_encounter()
     {
         $this->post('/register', $this->registration());

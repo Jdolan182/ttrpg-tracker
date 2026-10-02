@@ -110,7 +110,7 @@ const textareaClass =
             </div>
 
             <!-- Basics -->
-            <section class="grid gap-4 rounded-lg border border-border bg-card p-4 sm:grid-cols-2">
+            <section class="grid gap-4 rounded-xl border border-border bg-card p-4 shadow-sm sm:grid-cols-2">
                 <div class="grid gap-1.5 sm:col-span-2">
                     <Label for="name">Name</Label>
                     <Input id="name" v-model="form.name" required maxlength="100" placeholder="Goblin shaman" />
@@ -136,7 +136,7 @@ const textareaClass =
             </section>
 
             <!-- Combat numbers -->
-            <section class="grid gap-4 rounded-lg border border-border bg-card p-4 sm:grid-cols-3">
+            <section class="grid gap-4 rounded-xl border border-border bg-card p-4 shadow-sm sm:grid-cols-3">
                 <div class="grid gap-1.5">
                     <Label for="hp">Hit points</Label>
                     <Input id="hp" v-model="form.hp" type="number" min="1" required />
@@ -155,7 +155,7 @@ const textareaClass =
             </section>
 
             <!-- Stats -->
-            <section class="space-y-3 rounded-lg border border-border bg-card p-4">
+            <section class="space-y-3 rounded-xl border border-border bg-card p-4 shadow-sm">
                 <div>
                     <h2 class="font-semibold">Stats</h2>
                     <p class="text-sm text-muted-foreground">Name them whatever your game uses, e.g. STR or Might.</p>
@@ -188,7 +188,11 @@ const textareaClass =
             </section>
 
             <!-- Traits and actions share the same name + description editor -->
-            <section v-for="list in ['traits', 'actions'] as const" :key="list" class="space-y-3 rounded-lg border border-border bg-card p-4">
+            <section
+                v-for="list in ['traits', 'actions'] as const"
+                :key="list"
+                class="space-y-3 rounded-xl border border-border bg-card p-4 shadow-sm"
+            >
                 <div>
                     <h2 class="font-semibold">{{ list === 'traits' ? 'Traits' : 'Actions' }}</h2>
                     <p class="text-sm text-muted-foreground">

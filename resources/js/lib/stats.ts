@@ -1,4 +1,30 @@
+import type { CreatureStat } from '@/types/tracker';
+
 export type StatDisplay = 'score_modifier' | 'modifier_score' | 'score';
+
+// A stat being typed in by hand (StatsEditor). A blank value means "leave this one out".
+export interface StatRow {
+    label: string;
+    value: number | string;
+}
+
+export const statRows = (labels: string[]): StatRow[] => labels.map((label) => ({ label, value: '' }));
+
+export const rowsFromStats = (stats: CreatureStat[] = []): StatRow[] => stats.map((s) => ({ label: s.label, value: s.value }));
+
+/** The rows that have a name and a whole-number value, as stats. Duplicate names keep the first. */
+export const statsFromRows = (rows: StatRow[]): CreatureStat[] => {
+    const seen = new Set<string>();
+    const stats: CreatureStat[] = [];
+    for (const row of rows) {
+        const label = row.label.trim().slice(0, 20);
+        const value = Number(row.value);
+        if (!label || row.value === '' || !Number.isInteger(value) || seen.has(label.toLowerCase())) continue;
+        seen.add(label.toLowerCase());
+        stats.push({ label, value: Math.max(-1000, Math.min(1000, value)) });
+    }
+    return stats;
+};
 
 export const statDisplays: { value: StatDisplay; label: string; example: string }[] = [
     { value: 'score_modifier', label: 'Score with modifier', example: '18 (+4)' },

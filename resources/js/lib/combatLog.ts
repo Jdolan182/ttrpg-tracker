@@ -18,7 +18,17 @@ export type LogEntryType =
     | 'removed'
     | 'moved'
     | 'sorted'
-    | 'initiative_rolled';
+    | 'initiative_rolled'
+    | 'condition_expired'
+    | 'temp_hp'
+    // detail: 'start' | 'end' | 'kept' | 'lost'; amount is the save DC for kept/lost.
+    | 'concentration'
+    // detail: 'success' | 'failure'; amount is how many of that kind they now have.
+    | 'death_save'
+    | 'stabilized'
+    | 'died'
+    | 'hidden'
+    | 'revealed';
 
 export interface LogEntry {
     id: string;
@@ -95,6 +105,27 @@ export const describe = (entry: LogEntry): string => {
             return 'Turn order sorted by initiative';
         case 'initiative_rolled':
             return entry.detail === 'everyone' ? 'Initiative rolled for everyone' : 'Initiative rolled for monsters and NPCs';
+        case 'condition_expired':
+            return `${targets} is no longer ${entry.detail} (it wore off)`;
+        case 'temp_hp':
+            return `${targets} gained ${entry.amount} temporary HP`;
+        case 'concentration':
+            if (entry.detail === 'start') return `${targets} started concentrating`;
+            if (entry.detail === 'kept') return `${targets} kept concentration (DC ${entry.amount})`;
+            if (entry.detail === 'lost') return `${targets} lost concentration (DC ${entry.amount})`;
+            return `${targets} stopped concentrating`;
+        case 'death_save':
+            return entry.detail === 'success'
+                ? `${targets} succeeded on a death save (${entry.amount} of 3)`
+                : `${targets} failed a death save (${entry.amount} of 3)`;
+        case 'stabilized':
+            return `${targets} is stable`;
+        case 'died':
+            return `${targets} died`;
+        case 'hidden':
+            return `${targets} was hidden from players`;
+        case 'revealed':
+            return `${targets} was revealed to players`;
     }
 };
 

@@ -4,79 +4,82 @@
 
 body,
 html {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-sans:
+        'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
 }
 
+/* Theme: warm, parchment-leaning neutrals with a deep crimson accent, so it reads as a tabletop
+   tool rather than a generic dashboard. Colours are HSL triplets used by tailwind.config.js. */
 @layer base {
     :root {
-        --background: 0 0% 100%;
-        --foreground: 0 0% 3.9%;
+        --background: 36 33% 97%;
+        --foreground: 24 15% 10%;
         --card: 0 0% 100%;
-        --card-foreground: 0 0% 3.9%;
+        --card-foreground: 24 15% 10%;
         --popover: 0 0% 100%;
-        --popover-foreground: 0 0% 3.9%;
-        --primary: 0 0% 9%;
-        --primary-foreground: 0 0% 98%;
-        --secondary: 0 0% 92.1%;
-        --secondary-foreground: 0 0% 9%;
-        --muted: 0 0% 96.1%;
-        --muted-foreground: 0 0% 45.1%;
-        --accent: 0 0% 96.1%;
-        --accent-foreground: 0 0% 9%;
-        --destructive: 0 84.2% 60.2%;
+        --popover-foreground: 24 15% 10%;
+        --primary: 352 65% 38%;
+        --primary-foreground: 36 33% 97%;
+        --secondary: 36 20% 92%;
+        --secondary-foreground: 24 15% 12%;
+        --muted: 36 22% 94%;
+        --muted-foreground: 24 8% 40%;
+        --accent: 36 28% 92%;
+        --accent-foreground: 24 15% 10%;
+        --destructive: 0 72% 46%;
         --destructive-foreground: 0 0% 98%;
-        --border: 0 0% 92.8%;
-        --input: 0 0% 89.8%;
-        --ring: 0 0% 3.9%;
+        --border: 30 18% 87%;
+        --input: 30 18% 84%;
+        --ring: 352 65% 38%;
         --chart-1: 12 76% 61%;
         --chart-2: 173 58% 39%;
         --chart-3: 197 37% 24%;
         --chart-4: 43 74% 66%;
         --chart-5: 27 87% 67%;
         --radius: 0.5rem;
-        --sidebar-background: 0 0% 98%;
-        --sidebar-foreground: 240 5.3% 26.1%;
-        --sidebar-primary: 0 0% 10%;
-        --sidebar-primary-foreground: 0 0% 98%;
-        --sidebar-accent: 0 0% 94%;
-        --sidebar-accent-foreground: 0 0% 30%;
-        --sidebar-border: 0 0% 91%;
-        --sidebar-ring: 217.2 91.2% 59.8%;
+        --sidebar-background: 36 30% 96%;
+        --sidebar-foreground: 24 10% 26%;
+        --sidebar-primary: 352 65% 38%;
+        --sidebar-primary-foreground: 36 33% 97%;
+        --sidebar-accent: 36 25% 92%;
+        --sidebar-accent-foreground: 24 10% 26%;
+        --sidebar-border: 30 18% 87%;
+        --sidebar-ring: 352 65% 38%;
     }
 
     .dark {
-        --background: 0 0% 3.9%;
-        --foreground: 0 0% 98%;
-        --card: 0 0% 3.9%;
-        --card-foreground: 0 0% 98%;
-        --popover: 0 0% 3.9%;
-        --popover-foreground: 0 0% 98%;
-        --primary: 0 0% 98%;
-        --primary-foreground: 0 0% 9%;
-        --secondary: 0 0% 14.9%;
-        --secondary-foreground: 0 0% 98%;
-        --muted: 0 0% 6.9%;
-        --muted-foreground: 0 0% 63.9%;
-        --accent: 0 0% 14.9%;
-        --accent-foreground: 0 0% 98%;
-        --destructive: 0 84% 60%;
+        --background: 24 12% 7%;
+        --foreground: 36 20% 94%;
+        --card: 24 10% 10%;
+        --card-foreground: 36 20% 94%;
+        --popover: 24 10% 10%;
+        --popover-foreground: 36 20% 94%;
+        --primary: 352 70% 62%;
+        --primary-foreground: 24 12% 7%;
+        --secondary: 24 8% 16%;
+        --secondary-foreground: 36 20% 94%;
+        --muted: 24 8% 13%;
+        --muted-foreground: 30 8% 63%;
+        --accent: 24 8% 17%;
+        --accent-foreground: 36 20% 94%;
+        --destructive: 0 72% 58%;
         --destructive-foreground: 0 0% 98%;
-        --border: 0 0% 14.9%;
-        --input: 0 0% 14.9%;
-        --ring: 0 0% 83.1%;
+        --border: 24 8% 19%;
+        --input: 24 8% 22%;
+        --ring: 352 70% 62%;
         --chart-1: 220 70% 50%;
         --chart-2: 160 60% 45%;
         --chart-3: 30 80% 55%;
         --chart-4: 280 65% 60%;
         --chart-5: 340 75% 55%;
-        --sidebar-background: 0 0% 7%;
-        --sidebar-foreground: 0 0% 95.9%;
-        --sidebar-primary: 360, 100%, 100%;
-        --sidebar-primary-foreground: 0 0% 100%;
-        --sidebar-accent: 0 0% 15.9%;
-        --sidebar-accent-foreground: 240 4.8% 95.9%;
-        --sidebar-border: 0 0% 15.9%;
-        --sidebar-ring: 217.2 91.2% 59.8%;
+        --sidebar-background: 24 10% 9%;
+        --sidebar-foreground: 36 20% 94%;
+        --sidebar-primary: 352 70% 62%;
+        --sidebar-primary-foreground: 24 12% 7%;
+        --sidebar-accent: 24 8% 17%;
+        --sidebar-accent-foreground: 36 20% 94%;
+        --sidebar-border: 24 8% 19%;
+        --sidebar-ring: 352 70% 62%;
     }
 }
 
@@ -87,5 +90,11 @@ html {
 
     body {
         @apply bg-background text-foreground;
+    }
+
+    /* Headings get the display serif; body text stays in the sans for readability at a glance. */
+    h1,
+    h2 {
+        @apply font-display tracking-normal;
     }
 }

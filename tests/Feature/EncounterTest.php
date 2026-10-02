@@ -80,6 +80,103 @@ class EncounterTest extends TestCase
         $this->assertDatabaseHas('encounters', ['name' => 'Prep']);
     }
 
+    public function test_quick_added_combatants_without_a_creature_can_be_saved()
+    {
+        $user = User::factory()->create();
+        $goblin = Creature::factory()->srd()->create();
+
+        $payload = $this->payload($goblin);
+        $payload['combatants'][] = [
+            'id' => 'q1', 'creatureId' => null, 'name' => 'Aria', 'side' => 'player',
+            'initiative' => 18, 'hp' => 38, 'maxHp' => 38, 'ac' => 15, 'conditions' => [],
+        ];
+        // Any side is fine without a creature to check against.
+        $payload['combatants'][] = [
+            'id' => 'q2', 'creatureId' => null, 'name' => 'Town guard', 'side' => 'ally',
+            'initiative' => 5, 'hp' => 11, 'maxHp' => 11, 'ac' => 16, 'conditions' => [],
+        ];
+
+        $payload['combatants'][2]['stats'] = [['label' => 'STR', 'value' => 12], ['label' => 'DEX', 'value' => '18']];
+        // Combatants from the compendium take stats from their creature, so any sent are dropped.
+        $payload['combatants'][0]['stats'] = [['label' => 'STR', 'value' => 99]];
+
+        $this->actingAs($user)->post('/encounters', $payload)->assertSessionHasNoErrors();
+
+        $saved = $user->encounters()->sole()->combatants;
+        $this->assertNull($saved[2]['creatureId']);
+        $this->assertSame(['player', 'ally'], [$saved[2]['side'], $saved[3]['side']]);
+        $this->assertEquals([['label' => 'STR', 'value' => 12], ['label' => 'DEX', 'value' => 18]], $saved[2]['stats']);
+        $this->assertArrayNotHasKey('stats', $saved[0]);
+        $this->assertArrayNotHasKey('stats', $saved[3]);
+    }
+
+    public function test_quick_added_stats_are_validated()
+    {
+        $goblin = Creature::factory()->srd()->create();
+        $payload = $this->payload($goblin);
+        $payload['combatants'][] = [
+            'id' => 'q1', 'creatureId' => null, 'name' => 'Aria', 'side' => 'player', 'initiative' => 1,
+            'hp' => 1, 'maxHp' => 1, 'ac' => 1, 'conditions' => [], 'stats' => [['label' => str_repeat('X', 30), 'value' => 'lots']],
+        ];
+
+        $this->actingAs(User::factory()->create())->post('/encounters', $payload)
+            ->assertSessionHasErrors(['combatants.2.stats.0.label', 'combatants.2.stats.0.value']);
+    }
+
+    public function test_fight_state_is_saved_and_tidied()
+    {
+        $user = User::factory()->create();
+        $goblin = Creature::factory()->srd()->create();
+        $payload = $this->payload($goblin);
+
+        // Goblin 1 is Prone (timed) and concentrating, with temp HP, hidden from players.
+        $payload['combatants'][0] += [
+            'durations' => ['Prone' => 2, 'Stunned' => 3], // Stunned isn't one of its conditions
+            'tempHp' => 5,
+            'concentrating' => true,
+            'hidden' => true,
+            'deathSaves' => ['successes' => 1, 'failures' => 2], // not a player, so dropped
+        ];
+        $payload['combatants'][] = [
+            'id' => 'q1', 'creatureId' => null, 'name' => 'Aria', 'side' => 'player', 'initiative' => 3,
+            'hp' => 0, 'maxHp' => 38, 'ac' => 15, 'conditions' => [], 'deathSaves' => ['successes' => 1, 'failures' => 2],
+        ];
+        $payload['log'] = collect(['condition_expired', 'temp_hp', 'concentration', 'death_save', 'stabilized', 'died', 'hidden', 'revealed'])
+            ->map(fn (string $type, int $i) => ['id' => "l{$i}", 'at' => '2026-10-02T12:00:00Z', 'round' => 2, 'type' => $type, 'targets' => ['Goblin 1']])
+            ->all();
+
+        $this->actingAs($user)->post('/encounters', $payload)->assertSessionHasNoErrors();
+
+        [$goblinOne, $goblinTwo, $aria] = $user->encounters()->sole()->combatants;
+        $this->assertSame(['Prone' => 2], $goblinOne['durations']);
+        $this->assertSame(5, $goblinOne['tempHp']);
+        $this->assertTrue($goblinOne['concentrating']);
+        $this->assertTrue($goblinOne['hidden']);
+        $this->assertArrayNotHasKey('deathSaves', $goblinOne);
+        // Nothing optional is stored for a plain combatant.
+        $this->assertEqualsCanonicalizing(['id', 'creatureId', 'name', 'side', 'initiative', 'hp', 'maxHp', 'ac', 'conditions', 'used'], array_keys($goblinTwo));
+        $this->assertEquals(['successes' => 1, 'failures' => 2], $aria['deathSaves']);
+    }
+
+    public function test_fight_state_is_validated()
+    {
+        $goblin = Creature::factory()->srd()->create();
+        $payload = $this->payload($goblin);
+        $payload['combatants'][0] += [
+            'durations' => ['Prone' => 0],
+            'tempHp' => -3,
+            'concentrating' => 'maybe',
+            'deathSaves' => ['successes' => 4, 'failures' => 0],
+        ];
+
+        $this->actingAs(User::factory()->create())->post('/encounters', $payload)->assertSessionHasErrors([
+            'combatants.0.durations.Prone',
+            'combatants.0.tempHp',
+            'combatants.0.concentrating',
+            'combatants.0.deathSaves.successes',
+        ]);
+    }
+
     public function test_the_history_and_action_uses_are_saved()
     {
         $user = User::factory()->create();

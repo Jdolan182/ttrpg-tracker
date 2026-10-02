@@ -20,6 +20,11 @@ const tone: Partial<Record<LogEntryType, string>> = {
     sorted: 'text-muted-foreground',
     moved: 'text-muted-foreground',
     initiative_rolled: 'text-muted-foreground',
+    temp_hp: 'text-sky-700 dark:text-sky-400',
+    died: 'font-medium text-red-700 dark:text-red-400',
+    stabilized: 'font-medium text-emerald-700 dark:text-emerald-400',
+    hidden: 'text-muted-foreground',
+    revealed: 'text-muted-foreground',
 };
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });

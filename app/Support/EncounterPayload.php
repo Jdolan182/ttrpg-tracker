@@ -23,6 +23,7 @@ class EncounterPayload
     public const LOG_TYPES = [
         'combat_started', 'round', 'turn', 'damage', 'heal', 'down', 'defeated', 'revived',
         'condition_on', 'condition_off', 'side', 'action', 'joined', 'removed', 'moved', 'sorted', 'initiative_rolled',
+        'condition_expired', 'temp_hp', 'concentration', 'death_save', 'stabilized', 'died', 'hidden', 'revealed',
     ];
 
     /**
@@ -37,7 +38,8 @@ class EncounterPayload
             'activeIndex' => ['required', 'integer', 'min:0'],
             'combatants' => ['present', 'array', 'min:'.$minCombatants, 'max:'.self::MAX_COMBATANTS],
             'combatants.*.id' => ['required', 'string', 'max:50', 'distinct'],
-            'combatants.*.creatureId' => ['required', 'integer'],
+            // Null for a quick-added combatant (e.g. a guest's player character) that isn't in the compendium.
+            'combatants.*.creatureId' => ['present', 'nullable', 'integer'],
             'combatants.*.name' => ['required', 'string', 'max:100'],
             // Optional so fights saved before sides existed still load; toAttributes() fills it in.
             'combatants.*.side' => ['nullable', Rule::in(self::SIDES)],
@@ -47,9 +49,23 @@ class EncounterPayload
             'combatants.*.ac' => ['required', 'integer', 'min:0', 'max:1000'],
             'combatants.*.conditions' => ['present', 'array', 'max:30'],
             'combatants.*.conditions.*' => ['string', 'max:50'],
+            // Quick-added combatants can carry their own stats, since they have no creature to take them from.
+            'combatants.*.stats' => ['nullable', 'array', 'max:30'],
+            'combatants.*.stats.*.label' => ['required', 'string', 'max:20'],
+            'combatants.*.stats.*.value' => ['required', 'integer', 'between:-1000,1000'],
             // How many times each limited action has been used, keyed by action name.
             'combatants.*.used' => ['nullable', 'array', 'max:50'],
             'combatants.*.used.*' => ['integer', 'min:0', 'max:999'],
+            // Rounds left on timed conditions, keyed by condition name; counted down at the end of their turn.
+            'combatants.*.durations' => ['nullable', 'array', 'max:30'],
+            'combatants.*.durations.*' => ['integer', 'min:1', 'max:1000'],
+            'combatants.*.tempHp' => ['nullable', 'integer', 'min:0', 'max:100000'],
+            'combatants.*.concentrating' => ['nullable', 'boolean'],
+            // Hidden from the (future) player view; the DM still sees them.
+            'combatants.*.hidden' => ['nullable', 'boolean'],
+            'combatants.*.deathSaves' => ['nullable', 'array'],
+            'combatants.*.deathSaves.successes' => ['required_with:combatants.*.deathSaves', 'integer', 'between:0,3'],
+            'combatants.*.deathSaves.failures' => ['required_with:combatants.*.deathSaves', 'integer', 'between:0,3'],
             // The history is display-only, but still bounded and shaped.
             'log' => ['nullable', 'array', 'max:'.self::MAX_LOG_ENTRIES],
             'log.*.id' => ['required', 'string', 'max:50'],
@@ -82,14 +98,18 @@ class EncounterPayload
         }
 
         $kinds = self::creatureKinds($data, $user);
-        $creatureIds = array_unique(array_column($data['combatants'], 'creatureId'));
-        if (count($kinds) !== count($creatureIds)) {
+        if (count($kinds) !== count(self::creatureIds($data))) {
             $problems['combatants'] = 'One or more creatures in this encounter no longer exist.';
 
             return $problems;
         }
 
         foreach ($data['combatants'] as $index => $combatant) {
+            // Quick-added combatants have no creature to check against, so any side goes.
+            if ($combatant['creatureId'] === null) {
+                continue;
+            }
+
             $side = $combatant['side'] ?? null;
             $isPlayer = $kinds[$combatant['creatureId']] === 'player';
             if ($side !== null && $isPlayer !== ($side === 'player')) {
@@ -117,22 +137,7 @@ class EncounterPayload
             'name' => $data['name'],
             'round' => $data['round'],
             'active_index' => $data['activeIndex'],
-            'combatants' => array_map(fn (array $combatant) => [
-                'id' => $combatant['id'],
-                'creatureId' => $combatant['creatureId'],
-                'name' => $combatant['name'],
-                'side' => $combatant['side'] ?? self::defaultSide($kinds[$combatant['creatureId']] ?? 'monster'),
-                'initiative' => $combatant['initiative'],
-                'hp' => min($combatant['hp'], $combatant['maxHp']),
-                'maxHp' => $combatant['maxHp'],
-                'ac' => $combatant['ac'],
-                'conditions' => array_values(array_unique($combatant['conditions'])),
-                // An object keyed by action name; cast so an empty one stays {} rather than [].
-                'used' => (object) array_filter(
-                    array_map('intval', $combatant['used'] ?? []),
-                    fn (int $count) => $count > 0,
-                ),
-            ], $data['combatants']),
+            'combatants' => array_map(fn (array $combatant) => self::combatantAttributes($combatant, $kinds), $data['combatants']),
             'log' => array_map(fn (array $entry) => array_filter([
                 'id' => $entry['id'],
                 'at' => $entry['at'],
@@ -145,6 +150,63 @@ class EncounterPayload
                 'detail' => $entry['detail'] ?? null,
             ], fn ($value) => $value !== null), $data['log'] ?? []),
         ];
+    }
+
+    /**
+     * One combatant as stored. Optional state (temp HP, concentration, death saves, timers…) is only
+     * kept when it's set, so a plain combatant stays small.
+     *
+     * @param  array<string, mixed>  $combatant
+     * @param  array<int, string>  $kinds
+     * @return array<string, mixed>
+     */
+    private static function combatantAttributes(array $combatant, array $kinds): array
+    {
+        $conditions = array_values(array_unique($combatant['conditions']));
+
+        $attributes = [
+            'id' => $combatant['id'],
+            'creatureId' => $combatant['creatureId'],
+            'name' => $combatant['name'],
+            'side' => $combatant['side'] ?? self::defaultSide($kinds[$combatant['creatureId'] ?? 0] ?? 'monster'),
+            'initiative' => $combatant['initiative'],
+            'hp' => min($combatant['hp'], $combatant['maxHp']),
+            'maxHp' => $combatant['maxHp'],
+            'ac' => $combatant['ac'],
+            'conditions' => $conditions,
+            // An object keyed by action name; cast so an empty one stays {} rather than [].
+            'used' => (object) array_filter(array_map('intval', $combatant['used'] ?? []), fn (int $count) => $count > 0),
+        ];
+
+        // Only quick-added combatants keep stats of their own; the rest use their creature's.
+        if ($combatant['creatureId'] === null && ! empty($combatant['stats'])) {
+            $attributes['stats'] = array_map(fn (array $stat) => ['label' => $stat['label'], 'value' => (int) $stat['value']], $combatant['stats']);
+        }
+
+        // Timers only make sense for conditions the combatant actually has.
+        $durations = array_intersect_key(array_map('intval', $combatant['durations'] ?? []), array_flip($conditions));
+        if ($durations) {
+            $attributes['durations'] = $durations;
+        }
+
+        if (! empty($combatant['tempHp'])) {
+            $attributes['tempHp'] = (int) $combatant['tempHp'];
+        }
+        if (! empty($combatant['concentrating'])) {
+            $attributes['concentrating'] = true;
+        }
+        if (! empty($combatant['hidden'])) {
+            $attributes['hidden'] = true;
+        }
+        // Death saves are a player-character thing, and only matter once they're down.
+        if (isset($combatant['deathSaves']) && $attributes['side'] === 'player') {
+            $attributes['deathSaves'] = [
+                'successes' => (int) $combatant['deathSaves']['successes'],
+                'failures' => (int) $combatant['deathSaves']['failures'],
+            ];
+        }
+
+        return $attributes;
     }
 
     /**
@@ -168,10 +230,24 @@ class EncounterPayload
      */
     private static function creatureKinds(array $data, ?User $user): array
     {
-        $creatureIds = array_values(array_unique(array_column($data['combatants'], 'creatureId')));
+        $creatureIds = self::creatureIds($data);
 
         return $creatureIds === []
             ? []
             : Creature::visibleTo($user)->whereIn('id', $creatureIds)->pluck('kind', 'id')->all();
+    }
+
+    /**
+     * The distinct compendium creatures the encounter uses; quick-added combatants have none.
+     *
+     * @param  array<string, mixed>  $data
+     * @return list<int>
+     */
+    private static function creatureIds(array $data): array
+    {
+        return array_values(array_unique(array_filter(
+            array_column($data['combatants'], 'creatureId'),
+            fn ($id) => $id !== null,
+        )));
     }
 }

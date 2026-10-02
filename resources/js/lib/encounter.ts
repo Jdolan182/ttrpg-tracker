@@ -1,5 +1,5 @@
 import { modifier } from '@/lib/stats';
-import type { Combatant, CombatantSide, Creature, CreatureAction, LimitPeriod } from '@/types/tracker';
+import type { Combatant, CombatantSide, Creature, CreatureAction, CreatureStat, LimitPeriod } from '@/types/tracker';
 import type { LucideIcon } from 'lucide-vue-next';
 import { ArrowDownToLine, Ban, EarOff, EyeOff, FlaskConical, Frown, Ghost, Grab, Heart, Link, Moon, Mountain, Sparkles, Zap } from 'lucide-vue-next';
 
@@ -53,8 +53,10 @@ export const normalizeCombatants = (combatants: Combatant[], creaturesById: Map<
     for (const combatant of combatants) {
         // An empty object round-trips through PHP as [], and older saves have none at all.
         if (!combatant.used || Array.isArray(combatant.used)) combatant.used = {};
+        if (Array.isArray(combatant.durations)) delete combatant.durations;
+        if (combatant.creatureId === undefined) combatant.creatureId = null;
 
-        const creature = creaturesById.get(combatant.creatureId);
+        const creature = combatant.creatureId === null ? undefined : creaturesById.get(combatant.creatureId);
         // A deleted creature's kind is unknown, so trust whatever side was saved.
         if (!creature && combatant.side) continue;
 
@@ -94,6 +96,28 @@ export const restoreUses = (combatant: Combatant, creature: Creature | undefined
 
 export const byInitiative = (a: Combatant, b: Combatant) => b.initiative - a.initiative;
 
+// How long a condition lasts, in rounds. Counted down at the end of the affected combatant's turn,
+// so "until the end of its next turn" is 1. Null means until it's removed by hand.
+export const conditionDurations: { value: number | null; label: string }[] = [
+    { value: null, label: 'Until removed' },
+    { value: 1, label: '1 round' },
+    { value: 2, label: '2 rounds' },
+    { value: 3, label: '3 rounds' },
+    { value: 5, label: '5 rounds' },
+    { value: 10, label: '1 minute (10 rounds)' },
+    { value: 100, label: '10 minutes (100 rounds)' },
+];
+
+// The d20 rule for keeping concentration after taking damage.
+export const concentrationDc = (damage: number) => Math.max(10, Math.floor(damage / 2));
+
+/** A player character who has failed three death saves. Out of the fight for good. */
+export const isDead = (combatant: Combatant) => combatant.side === 'player' && (combatant.deathSaves?.failures ?? 0) >= 3;
+
+/** A player character at 0 HP who has made three successful death saves. */
+export const isStable = (combatant: Combatant) =>
+    combatant.side === 'player' && combatant.hp === 0 && (combatant.deathSaves?.successes ?? 0) >= 3 && !isDead(combatant);
+
 /**
  * Adds combatants without disturbing a hand-arranged order: each one goes after everyone
  * with the same or higher initiative, in front of the first lower one. Updates `list` in place.
@@ -114,14 +138,45 @@ export const rollDie = (sides: number) => {
 
 // Uses the d20 convention: a stat called DEX or Dexterity gives the bonus. Anything else rolls a plain d20.
 // This moves onto the game system once systems are configurable.
-export const initiativeBonus = (creature: Creature | undefined) => {
-    const dex = creature?.stats.find((s) => ['dex', 'dexterity'].includes(s.label.trim().toLowerCase()));
+export const initiativeBonus = (stats: CreatureStat[] | undefined) => {
+    const dex = stats?.find((s) => ['dex', 'dexterity'].includes(s.label.trim().toLowerCase()));
     return dex ? modifier(dex.value) : 0;
 };
 
-export const rollInitiative = (creature: Creature | undefined) => rollDie(20) + initiativeBonus(creature);
+export const rollInitiative = (stats: CreatureStat[] | undefined) => rollDie(20) + initiativeBonus(stats);
+
+// The six d20 ability scores, offered as a starting point when typing stats in by hand.
+export const defaultStatLabels = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
 
 const newId = () => (typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+
+export interface QuickCombatantDetails {
+    name: string;
+    hp: number;
+    ac: number;
+    initiative: number;
+    side: CombatantSide;
+    stats: CreatureStat[];
+}
+
+/**
+ * A combatant added straight into the encounter without a compendium entry, e.g. a player
+ * character a guest types in at the table. It has no creature, so it carries any stats itself
+ * and has no actions.
+ */
+export const quickCombatant = (details: QuickCombatantDetails): Combatant => ({
+    id: newId(),
+    creatureId: null,
+    name: details.name,
+    side: details.side,
+    initiative: details.initiative,
+    hp: details.hp,
+    maxHp: details.hp,
+    ac: details.ac,
+    conditions: [],
+    used: {},
+    ...(details.stats.length ? { stats: details.stats } : {}),
+});
 
 /**
  * Combatants for `count` copies of a creature. They get numbered ("Goblin 1", "Goblin 2")
@@ -145,7 +200,7 @@ export const combatantsFor = (
         creatureId: creature.id,
         name: numbered ? `${creature.name} ${sameCreature + i + 1}` : creature.name,
         side: isPlayer ? 'player' : side === 'player' ? 'enemy' : side,
-        initiative: initiative ?? (isPlayer ? 0 : rollInitiative(creature)),
+        initiative: initiative ?? (isPlayer ? 0 : rollInitiative(creature.stats)),
         hp: creature.hp,
         maxHp: creature.hp,
         ac: creature.ac,
