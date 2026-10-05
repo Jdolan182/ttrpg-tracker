@@ -9,6 +9,8 @@ export interface StoredTracker {
     // The saved encounter being edited, or null for one that has never been saved.
     encounterId: number | null;
     name: string;
+    // The campaign the encounter belongs to. Missing in older stored fights.
+    campaignId?: number | null;
     combatants: Combatant[];
     // 0 while setting up (before "Start combat"), then 1, 2, 3…
     round: number;

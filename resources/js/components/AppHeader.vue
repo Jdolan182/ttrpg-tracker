@@ -16,7 +16,7 @@ import UserMenuContent from '@/components/UserMenuContent.vue';
 import { getInitials } from '@/composables/useInitials';
 import type { NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
-import { BookOpen, Menu, Swords } from 'lucide-vue-next';
+import { BookOpen, Castle, Menu, Swords } from 'lucide-vue-next';
 import { computed } from 'vue';
 
 const page = usePage();
@@ -30,7 +30,8 @@ const isCurrentRoute = (url: string) => {
 
 const activeItemStyles = computed(() => (url: string) => (isCurrentRoute(url) ? 'text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100' : ''));
 
-const mainNavItems: NavItem[] = [
+// Campaigns need an account (you run them or join them), so guests don't see the link.
+const mainNavItems = computed<NavItem[]>(() => [
     {
         title: 'Encounters',
         href: '/',
@@ -41,7 +42,8 @@ const mainNavItems: NavItem[] = [
         href: '/compendium',
         icon: BookOpen,
     },
-];
+    ...(auth.value.user ? [{ title: 'Campaigns', href: '/campaigns', icon: Castle }] : []),
+]);
 </script>
 
 <template>

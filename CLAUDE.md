@@ -50,9 +50,16 @@ If `.env` is ever left with `SHARE_MODE`/`TRUSTED_PROXIES`, restore it from `.en
   `active_index`, and `log` (the combat history, jsonb, capped at 1,000 entries).
   [app/Support/EncounterPayload.php](app/Support/EncounterPayload.php) validates saves and the guest import,
   including that every creature is visible to the user and that only player characters are on the player side.
+- **Campaigns** (`campaigns` table) belong to their DM (`user_id`). Players are normal accounts in the
+  `campaign_user` pivot, which also holds the character they claimed (`character_id`, one player per character).
+  The party is the DM's player creatures with that `campaign_id`; encounters join the same way. Deleting a
+  campaign keeps both. Players join at `/join/{invite_token}` (guests log in or register and come back via
+  `url.intended`); resetting the token kills the old link. `enemy_hp` (bands/exact/hidden) is for the player view.
 - The tracker page ([resources/js/pages/Encounters/Index.vue](resources/js/pages/Encounters/Index.vue)):
   - Its props are the saved encounters as ids and names only, plus one full `openEncounter` (from
-    `?encounter=` or the most recent). Opening another one reloads only that prop.
+    `?encounter=` or the most recent). Opening another one reloads only that prop. It also gets the DM's
+    `campaigns` (with party ids, for the campaign picker and "Add party") and `newInCampaign`
+    (`?new_in_campaign=`, from a campaign's New encounter button). The query is cleared once acted on.
   - The fight in progress is kept in `localStorage` ([resources/js/lib/trackerStorage.ts](resources/js/lib/trackerStorage.ts)),
     keyed per user or guest. When a guest registers, their fight is copied into the new account
     ([app/Actions/ImportGuestEncounter.php](app/Actions/ImportGuestEncounter.php)).
@@ -66,6 +73,15 @@ If `.env` is ever left with `SHARE_MODE`/`TRUSTED_PROXIES`, restore it from `.en
   - [resources/js/lib/stats.ts](resources/js/lib/stats.ts): d20 modifiers. The user setting `stat_display` controls how stats show.
   - `plainCopy()` in [resources/js/lib/utils.ts](resources/js/lib/utils.ts): use it instead of `structuredClone` on
     Inertia props, which are reactive proxies that `structuredClone` can't copy.
+
+## Plans and limits
+
+- Each user has a `plan` (`free`/`pro`). Limits are in [config/plans.php](config/plans.php); edit the numbers there.
+  `php artisan plan:set {email} [plan]` shows or changes an account's plan. Subscriptions are hidden: never
+  show prices or plan names in the UI, only usage ("12 of 25 creatures").
+- Anything that creates something with a limit calls `Limits::ensureCanCreate($user, 'key')`
+  ([app/Support/Limits.php](app/Support/Limits.php)) first. Edits never count. Usage is shared to pages as `limits`.
+- What's planned next, and the decisions behind it, is in [docs/roadmap.md](docs/roadmap.md).
 
 ## Conventions
 

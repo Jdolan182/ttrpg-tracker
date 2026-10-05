@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\SaveEncounterRequest;
+use App\Models\Campaign;
 use App\Models\Creature;
 use App\Models\Encounter;
 use App\Support\EncounterPayload;
+use App\Support\Limits;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -42,11 +44,22 @@ class EncounterController extends Controller
                 return $encounter?->toFrontend();
             },
             'creatures' => fn () => Creature::visibleTo($user)->orderBy('name')->get()->map->toFrontend(),
+            // Campaigns the user runs, with their party, for the campaign picker and "Add party".
+            'campaigns' => fn () => $user
+                ? $user->campaigns()->with('party:id,campaign_id')->orderBy('name')->get(['id', 'name'])
+                    ->map(fn (Campaign $c) => ['id' => $c->id, 'name' => $c->name, 'partyIds' => $c->party->pluck('id')])
+                : [],
+            // From a campaign's "New encounter" button: start a fresh encounter in that campaign.
+            'newInCampaign' => $user && $request->filled('new_in_campaign')
+                ? $user->campaigns()->whereKey($request->integer('new_in_campaign'))->value('id')
+                : null,
         ]);
     }
 
     public function store(SaveEncounterRequest $request): RedirectResponse
     {
+        Limits::ensureCanCreate($request->user(), 'encounters');
+
         $encounter = $request->user()->encounters()->create(EncounterPayload::toAttributes($request->validated(), $request->user()));
 
         return to_route('encounters.index')->with('savedEncounterId', $encounter->id);

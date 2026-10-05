@@ -8,9 +8,11 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { limitPeriods } from '@/lib/encounter';
 import { formatModifier, modifier } from '@/lib/stats';
 import { plainCopy } from '@/lib/utils';
+import type { SharedData } from '@/types';
 import type { Creature, CreatureEntry, CreatureKind, CreatureStat, LimitPeriod } from '@/types/tracker';
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { ArrowLeft, Plus, X } from 'lucide-vue-next';
+import { computed } from 'vue';
 
 // An action as edited: `uses` is '' while blank (unlimited), and `per` is kept even then so it's
 // remembered if a limit is typed back in.
@@ -24,15 +26,30 @@ const props = defineProps<{
     creature: Creature | null;
     // A creature to copy from when duplicating.
     template: Creature | null;
+    // Making a player character for this campaign's party (from the campaign page).
+    campaign?: { id: number; name: string } | null;
 }>();
 
 const isEditing = props.creature !== null;
+const forCampaign = !isEditing && props.campaign ? props.campaign : null;
+// Where Back and Cancel go: the campaign it was for, the creature being edited, or the compendium.
+const backHref = forCampaign
+    ? route('campaigns.show', forCampaign.id)
+    : route('compendium.index', props.creature ? { creature: props.creature.id } : {});
+const heading = isEditing ? `Edit ${props.creature?.name}` : forCampaign ? `New character for ${forCampaign.name}` : 'New creature';
+
+// Warn up front rather than after filling the whole form in; the server enforces it either way.
+const page = usePage<SharedData>();
+const atLimit = computed(() => {
+    const limit = page.props.limits?.creatures;
+    return !isEditing && !!limit && limit.used >= limit.limit;
+});
 const base = props.creature ?? props.template;
 
 const defaultStats: CreatureStat[] = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'].map((label) => ({ label, value: 10 }));
 
 const form = useForm({
-    kind: (base?.kind ?? 'monster') as CreatureKind,
+    kind: (forCampaign ? 'player' : (base?.kind ?? 'monster')) as CreatureKind,
     name: props.template ? `${props.template.name} (copy)` : (base?.name ?? ''),
     summary: base?.summary ?? '',
     rating: base?.rating ?? '',
@@ -66,6 +83,7 @@ const submit = () => {
     // A blank limit means unlimited: send no period with it.
     const withLimits = form.transform((data) => ({
         ...data,
+        campaign_id: forCampaign?.id ?? null,
         actions: data.actions.map((action) => ({
             ...action,
             uses: action.uses === '' ? null : action.uses,
@@ -96,18 +114,32 @@ const textareaClass =
 </script>
 
 <template>
-    <Head :title="isEditing ? `Edit ${creature?.name}` : 'New creature'" />
+    <Head :title="heading" />
 
     <AppLayout>
         <form class="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4" @submit.prevent="submit">
             <div class="flex flex-wrap items-center gap-3">
-                <Button variant="ghost" size="icon" as-child aria-label="Back to compendium">
-                    <Link :href="route('compendium.index', creature ? { creature: creature.id } : {})">
+                <Button variant="ghost" size="icon" as-child :aria-label="forCampaign ? 'Back to the campaign' : 'Back to compendium'">
+                    <Link :href="backHref">
                         <ArrowLeft />
                     </Link>
                 </Button>
-                <h1 class="text-2xl font-semibold tracking-tight">{{ isEditing ? `Edit ${creature?.name}` : 'New creature' }}</h1>
+                <h1 class="text-2xl font-semibold tracking-tight">{{ heading }}</h1>
             </div>
+            <p v-if="forCampaign" class="-mt-4 text-sm text-muted-foreground">
+                They'll join the party, and your players can claim them. They're also kept in your compendium.
+            </p>
+
+            <p
+                v-if="form.errors.limit || atLimit"
+                class="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-100"
+                role="alert"
+            >
+                {{
+                    form.errors.limit ??
+                    `You've reached the limit of ${page.props.limits?.creatures.limit} creatures. Delete one from your compendium to make room.`
+                }}
+            </p>
 
             <!-- Basics -->
             <section class="grid gap-4 rounded-xl border border-border bg-card p-4 shadow-sm sm:grid-cols-2">
@@ -118,7 +150,8 @@ const textareaClass =
                 </div>
                 <div class="grid gap-1.5">
                     <Label for="kind">Type</Label>
-                    <select id="kind" v-model="form.kind" class="h-10 rounded-md border border-input bg-background px-3 text-sm">
+                    <p v-if="forCampaign" id="kind" class="flex h-10 items-center text-sm text-muted-foreground">Player character</p>
+                    <select v-else id="kind" v-model="form.kind" class="h-10 rounded-md border border-input bg-background px-3 text-sm">
                         <option v-for="option in kindOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
                     </select>
                     <InputError :message="form.errors.kind" />
@@ -263,9 +296,11 @@ const textareaClass =
 
             <div class="flex items-center justify-end gap-2">
                 <Button variant="outline" as-child>
-                    <Link :href="route('compendium.index', creature ? { creature: creature.id } : {})">Cancel</Link>
+                    <Link :href="backHref">Cancel</Link>
                 </Button>
-                <Button type="submit" :disabled="form.processing">{{ isEditing ? 'Save changes' : 'Create creature' }}</Button>
+                <Button type="submit" :disabled="form.processing">{{
+                    isEditing ? 'Save changes' : forCampaign ? 'Create character' : 'Create creature'
+                }}</Button>
             </div>
         </form>
     </AppLayout>

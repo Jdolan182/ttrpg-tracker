@@ -5,6 +5,7 @@ namespace App\Actions;
 use App\Models\Encounter;
 use App\Models\User;
 use App\Support\EncounterPayload;
+use App\Support\Limits;
 use Illuminate\Support\Facades\Validator;
 
 /**
@@ -20,7 +21,8 @@ class ImportGuestEncounter
      */
     public function handle(User $user, ?array $payload): ?Encounter
     {
-        if (! $payload) {
+        // A brand-new account is never at the limit, but a plan with a limit of 0 could be.
+        if (! $payload || ! Limits::canCreate($user, 'encounters')) {
             return null;
         }
 

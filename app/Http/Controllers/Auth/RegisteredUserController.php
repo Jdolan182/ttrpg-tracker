@@ -52,6 +52,7 @@ class RegisteredUserController extends Controller
 
         Auth::login($user);
 
-        return to_route('encounters.index');
+        // Back to where they came from, e.g. a campaign invite link; otherwise the tracker.
+        return redirect()->intended(route('encounters.index', absolute: false));
     }
 }

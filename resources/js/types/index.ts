@@ -21,6 +21,8 @@ export interface SharedData {
     name: string;
     quote: { message: string; author: string };
     auth: Auth;
+    // Usage against the account's limits (config/plans.php). Null for guests.
+    limits: Record<'creatures' | 'encounters' | 'campaigns' | 'campaigns_joined', { used: number; limit: number }> | null;
     flash: {
         savedEncounterId: number | null;
     };

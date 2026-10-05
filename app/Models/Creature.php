@@ -57,6 +57,12 @@ class Creature extends Model
         return $this->belongsTo(User::class);
     }
 
+    /** The campaign whose party this player character is in. Set by the campaign pages, not mass assignment. */
+    public function campaign(): BelongsTo
+    {
+        return $this->belongsTo(Campaign::class);
+    }
+
     /**
      * Built-in SRD creatures, plus the given user's own creatures.
      */

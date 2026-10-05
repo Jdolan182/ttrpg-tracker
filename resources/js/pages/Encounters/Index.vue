@@ -38,7 +38,7 @@ import { rowsFromStats, statRows, statsFromRows, type StatRow } from '@/lib/stat
 import { readTracker, trackerStorageKey, writeTracker } from '@/lib/trackerStorage';
 import { fingerprint, plainCopy } from '@/lib/utils';
 import type { SharedData } from '@/types';
-import type { Combatant, CombatantSide, Creature, CreatureAction, Encounter, EncounterSummary } from '@/types/tracker';
+import type { Combatant, CombatantSide, Creature, CreatureAction, Encounter, EncounterSummary, TrackerCampaign } from '@/types/tracker';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import {
     ArrowDownWideNarrow,
@@ -63,6 +63,7 @@ import {
     Skull,
     Trash2,
     Undo2,
+    UsersRound,
 } from 'lucide-vue-next';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
@@ -74,6 +75,10 @@ const props = defineProps<{
     openEncounter: Encounter | null;
     // Everything the user can add: SRD creatures, plus their own when signed in.
     creatures: Creature[];
+    // Campaigns the user runs, for the campaign picker and "Add party".
+    campaigns: TrackerCampaign[];
+    // Set when arriving from a campaign's "New encounter" button.
+    newInCampaign: number | null;
 }>();
 
 const page = usePage<SharedData>();
@@ -82,6 +87,9 @@ const isGuest = !user;
 
 const encounterId = ref<number | null>(null);
 const name = ref('');
+// The campaign this encounter belongs to, if any.
+const campaignId = ref<number | null>(null);
+const campaign = computed(() => props.campaigns.find((c) => c.id === campaignId.value));
 const combatants = ref<Combatant[]>([]);
 const round = ref(1);
 const activeIndex = ref(0);
@@ -108,7 +116,15 @@ const statsOf = (combatant: Combatant) => creatureOf(combatant)?.stats ?? combat
 // last saved or opened. A fingerprint rather than a copy, so it can be kept in browser storage too.
 const currentFingerprint = () =>
     fingerprint(
-        JSON.stringify({ name: name.value, round: round.value, activeIndex: activeIndex.value, combatants: combatants.value, log: log.value }),
+        JSON.stringify({
+            name: name.value,
+            // Left out when empty (undefined), so fingerprints stored before campaigns existed still match.
+            campaignId: campaignId.value ?? undefined,
+            round: round.value,
+            activeIndex: activeIndex.value,
+            combatants: combatants.value,
+            log: log.value,
+        }),
     );
 const savedFingerprint = ref('');
 const isDirty = computed(() => currentFingerprint() !== savedFingerprint.value);
@@ -198,9 +214,21 @@ const resetView = () => {
     undoStack.value = [];
 };
 
-const startBlank = () => {
+// Drops ?encounter= / ?new_in_campaign= once they've been acted on, so a later refresh doesn't
+// act on them again (e.g. reopening an encounter after the DM has moved on to a new one).
+// (Only once mounted: on page load, onMounted does it after Inertia has set up the page.)
+let mounted = false;
+const clearUrlQuery = () => {
+    if (!mounted) return;
+    // A client-side visit, so Inertia's own copy of the URL changes too and doesn't put the query back.
+    if (window.location.search) router.replace({ url: route('encounters.index', undefined, false), preserveState: true, preserveScroll: true });
+};
+
+const startBlank = (inCampaign: number | null = null) => {
+    clearUrlQuery();
     encounterId.value = null;
     name.value = 'Untitled encounter';
+    campaignId.value = inCampaign;
     combatants.value = [];
     round.value = 0;
     activeIndex.value = 0;
@@ -213,6 +241,7 @@ const openSaved = (encounter: Encounter) => {
     const copy = loadable(encounter);
     encounterId.value = copy.id;
     name.value = copy.name;
+    campaignId.value = copy.campaignId ?? null;
     combatants.value = copy.combatants;
     round.value = copy.round;
     activeIndex.value = copy.activeIndex < copy.combatants.length ? copy.activeIndex : 0;
@@ -264,6 +293,8 @@ const restoreTracker = (): boolean => {
     const saved = props.savedEncounters.find((e) => e.id === stored.encounterId);
     encounterId.value = saved ? saved.id : null;
     name.value = stored.name;
+    // Drop a campaign that's since been deleted (or belongs to someone else after logging out).
+    campaignId.value = props.campaigns.some((c) => c.id === stored.campaignId) ? (stored.campaignId ?? null) : null;
     combatants.value = normalizeCombatants(stored.combatants, creaturesById.value);
     round.value = stored.round;
     activeIndex.value = stored.activeIndex;
@@ -278,6 +309,7 @@ const persistTracker = () =>
         version: 2,
         encounterId: encounterId.value,
         name: name.value,
+        campaignId: campaignId.value,
         combatants: combatants.value,
         round: round.value,
         activeIndex: activeIndex.value,
@@ -308,6 +340,7 @@ const saveEncounter = () => {
 
     const payload = {
         name: name.value.trim() || 'Untitled encounter',
+        campaignId: campaignId.value,
         round: round.value,
         activeIndex: activeIndex.value,
         combatants: combatants.value,
@@ -347,7 +380,7 @@ const deleteEncounter = () => {
     router.delete(route('encounters.destroy', id), {
         preserveScroll: true,
         preserveState: true,
-        onSuccess: startBlank,
+        onSuccess: () => startBlank(),
     });
 };
 
@@ -437,6 +470,28 @@ const addCombatants = (creature: Creature, count: number, initiative: number | n
         }
     });
     selectedId.value = added[0].id;
+};
+
+// The campaign's party members who aren't in the fight yet.
+const missingParty = computed(() => {
+    if (!campaign.value) return [];
+    const present = new Set(combatants.value.map((c) => c.creatureId));
+    return campaign.value.partyIds
+        .filter((id) => !present.has(id))
+        .map((id) => creaturesById.value.get(id))
+        .filter((creature): creature is Creature => !!creature);
+});
+
+const addParty = () => {
+    const party = missingParty.value;
+    if (!party.length) return;
+    change('Add party', () => {
+        for (const creature of party) {
+            const added = combatantsFor(creature, 1, null, combatants.value, 'player');
+            keepingTurn(() => insertByInitiative(combatants.value, added));
+            if (!isSetup.value) addLog({ type: 'joined', targets: [added[0].name], amount: added[0].initiative });
+        }
+    });
 };
 
 // Editing a quick-added combatant's own stats. Undoable, but not worth a history entry.
@@ -854,13 +909,27 @@ const onKeydown = (event: KeyboardEvent) => {
 onMounted(() => window.addEventListener('keydown', onKeydown));
 onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
 
-// Pick up where this browser left off; otherwise open the most recent saved encounter, or a blank one.
-if (!restoreTracker()) {
+// Pick up where this browser left off, unless a link asked for something else: a campaign's
+// "New encounter" button, or a specific encounter (?encounter=). Never lose unsaved work silently.
+const restored = restoreTracker();
+const requestedId = Number(new URLSearchParams(window.location.search).get('encounter')) || null;
+const okToReplace = () =>
+    !restored || !isDirty.value || !combatants.value.length || window.confirm('Discard your unsaved changes to this encounter?');
+
+if (props.newInCampaign) {
+    if (okToReplace()) startBlank(props.newInCampaign);
+} else if (requestedId && props.openEncounter?.id === requestedId && encounterId.value !== requestedId) {
+    if (okToReplace()) openSaved(props.openEncounter);
+} else if (!restored) {
     if (props.openEncounter) openSaved(props.openEncounter);
     else startBlank();
 }
+onMounted(() => {
+    mounted = true;
+    clearUrlQuery();
+});
 
-watch([encounterId, name, combatants, round, activeIndex, log], persistTracker, { deep: true, immediate: true });
+watch([encounterId, name, campaignId, combatants, round, activeIndex, log], persistTracker, { deep: true, immediate: true });
 </script>
 
 <template>
@@ -885,6 +954,27 @@ watch([encounterId, name, combatants, round, activeIndex, log], persistTracker, 
                 <span v-if="!isGuest" class="text-xs" :class="isDirty ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'">
                     {{ isDirty ? 'Unsaved changes' : 'Saved' }}
                 </span>
+                <!-- Only matters for a new encounter: saving an existing one never counts against the limit -->
+                <span
+                    v-if="encounterId === null && page.props.limits"
+                    class="text-xs tabular-nums"
+                    :class="
+                        page.props.limits.encounters.used >= page.props.limits.encounters.limit
+                            ? 'font-medium text-amber-700 dark:text-amber-400'
+                            : 'text-muted-foreground'
+                    "
+                >
+                    · {{ page.props.limits.encounters.used }} of {{ page.props.limits.encounters.limit }} encounters saved
+                </span>
+                <select
+                    v-if="!isGuest && (campaigns.length || campaignId !== null)"
+                    v-model="campaignId"
+                    class="h-9 max-w-48 rounded-md border border-input bg-background px-2 text-sm"
+                    aria-label="Campaign"
+                >
+                    <option :value="null">No campaign</option>
+                    <option v-for="c in campaigns" :key="c.id" :value="c.id">{{ c.name }}</option>
+                </select>
 
                 <div class="ml-auto flex flex-wrap items-center gap-2">
                     <Button variant="outline" size="sm" @click="newEncounter">
@@ -925,6 +1015,16 @@ watch([encounterId, name, combatants, round, activeIndex, log], persistTracker, 
                 <Button size="sm" @click="addOpen = true">
                     <Plus />
                     Add combatant
+                </Button>
+                <Button
+                    v-if="missingParty.length"
+                    variant="outline"
+                    size="sm"
+                    :title="`Add ${missingParty.map((c) => c.name).join(', ')}`"
+                    @click="addParty"
+                >
+                    <UsersRound />
+                    Add party
                 </Button>
                 <!-- Where the fight is at, readable from across the table -->
                 <span v-if="isSetup" class="ml-2 rounded-full border border-dashed border-border px-3 py-1 text-sm text-muted-foreground">

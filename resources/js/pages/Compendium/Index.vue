@@ -18,8 +18,11 @@ const props = defineProps<{
     selectedId: number | null;
 }>();
 
-const user = usePage<SharedData>().props.auth.user;
+const page = usePage<SharedData>();
+const user = page.props.auth.user;
 const isGuest = !user;
+// Updates after creating or deleting, since Inertia refreshes shared props on each visit.
+const creatureLimit = computed(() => page.props.limits?.creatures);
 
 const kindFilters: { value: CreatureKind | 'all'; label: string }[] = [
     { value: 'all', label: 'All' },
@@ -101,7 +104,20 @@ const deleteCreature = (creature: Creature) => {
         <div class="flex h-full flex-1 flex-col gap-4 p-4">
             <div class="flex flex-wrap items-center gap-3">
                 <h1 class="text-2xl font-semibold tracking-tight">Compendium</h1>
-                <Button size="sm" class="ml-auto" as-child :title="isGuest ? 'Create a free account to make your own creatures' : undefined">
+                <span
+                    v-if="creatureLimit"
+                    class="ml-auto text-xs tabular-nums"
+                    :class="creatureLimit.used >= creatureLimit.limit ? 'font-medium text-amber-700 dark:text-amber-400' : 'text-muted-foreground'"
+                    title="Your own creatures, NPCs and players. SRD monsters don't count."
+                >
+                    {{ creatureLimit.used }} of {{ creatureLimit.limit }} creatures made
+                </span>
+                <Button
+                    size="sm"
+                    :class="creatureLimit ? '' : 'ml-auto'"
+                    as-child
+                    :title="isGuest ? 'Create a free account to make your own creatures' : undefined"
+                >
                     <Link :href="isGuest ? route('register') : route('creatures.create')">
                         <Plus />
                         New creature

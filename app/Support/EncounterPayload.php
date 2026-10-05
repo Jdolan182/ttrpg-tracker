@@ -33,6 +33,8 @@ class EncounterPayload
     {
         return [
             'name' => ['required', 'string', 'max:100'],
+            // A campaign the user runs; checked in problems().
+            'campaignId' => ['nullable', 'integer'],
             // 0 while the DM is still setting up, before combat starts.
             'round' => ['required', 'integer', 'min:0', 'max:10000'],
             'activeIndex' => ['required', 'integer', 'min:0'],
@@ -93,6 +95,10 @@ class EncounterPayload
         $problems = [];
         $count = count($data['combatants']);
 
+        if (! empty($data['campaignId']) && ! $user?->campaigns()->whereKey($data['campaignId'])->exists()) {
+            $problems['campaignId'] = 'That campaign no longer exists.';
+        }
+
         if ($data['activeIndex'] > max(0, $count - 1)) {
             $problems['activeIndex'] = 'The active turn must be one of the combatants.';
         }
@@ -135,6 +141,7 @@ class EncounterPayload
 
         return [
             'name' => $data['name'],
+            'campaign_id' => $data['campaignId'] ?? null,
             'round' => $data['round'],
             'active_index' => $data['activeIndex'],
             'combatants' => array_map(fn (array $combatant) => self::combatantAttributes($combatant, $kinds), $data['combatants']),

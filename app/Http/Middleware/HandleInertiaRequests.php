@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\Limits;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -45,6 +46,8 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $request->user(),
             ],
+            // Usage against the account's limits, e.g. creatures: {used: 12, limit: 25}. Null for guests.
+            'limits' => fn () => $request->user() ? Limits::summary($request->user()) : null,
             'flash' => [
                 // Set after saving an encounter so the tracker can switch to the saved copy.
                 'savedEncounterId' => fn () => $request->session()->get('savedEncounterId'),

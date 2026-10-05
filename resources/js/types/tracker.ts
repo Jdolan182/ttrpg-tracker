@@ -73,6 +73,15 @@ export interface Combatant {
     deathSaves?: { successes: number; failures: number };
 }
 
+export type EnemyHpDisplay = 'bands' | 'exact' | 'hidden';
+
+// A campaign the user runs, as the tracker sees it: for the campaign picker and "Add party".
+export interface TrackerCampaign {
+    id: number;
+    name: string;
+    partyIds: number[];
+}
+
 // A saved encounter in the tracker's list; the full thing is loaded when it's opened.
 export interface EncounterSummary {
     id: number;
@@ -83,6 +92,7 @@ export interface EncounterSummary {
 export interface Encounter {
     id: number;
     name: string;
+    campaignId: number | null;
     // 0 while setting up, before combat starts.
     round: number;
     activeIndex: number;

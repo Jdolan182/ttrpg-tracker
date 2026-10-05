@@ -18,6 +18,8 @@ class Encounter extends Model
      */
     protected $fillable = [
         'name',
+        // Only ever set from EncounterPayload, which checks the user runs that campaign.
+        'campaign_id',
         'round',
         'active_index',
         'combatants',
@@ -53,6 +55,11 @@ class Encounter extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function campaign(): BelongsTo
+    {
+        return $this->belongsTo(Campaign::class);
+    }
+
     /**
      * The shape the tracker page works with (see resources/js/types/tracker.ts).
      *
@@ -63,6 +70,7 @@ class Encounter extends Model
         return [
             'id' => $this->id,
             'name' => $this->name,
+            'campaignId' => $this->campaign_id,
             'round' => $this->round,
             'activeIndex' => $this->active_index,
             'combatants' => $this->combatants,
