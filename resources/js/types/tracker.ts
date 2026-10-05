@@ -35,6 +35,8 @@ export interface Creature {
     rating: string;
     hp: number;
     ac: number;
+    // Added to the initiative roll. Null means work it out: DEX in d20 games, otherwise nothing.
+    initiativeBonus: number | null;
     speed: string;
     // Ordered so each game system can define its own stats.
     stats: CreatureStat[];

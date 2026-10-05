@@ -35,7 +35,7 @@ Decisions agreed for the next stretch of work, in build order. Update this as th
 ## 3. Player view (done)
 
 - Players see a campaign's encounter while it's in active combat: from Start combat until combat ends
-  (a new End combat button, or Reset). Setup is never shown.
+  (a new End combat button, which also resets the fight as if it never happened). Setup is never shown.
 - The tracker's Player view button switches the DM's screen to what players see. Opened in a second
   window (e.g. on a TV), it updates live as the DM runs the fight.
 - Outside campaigns, and for guests, Player view works in a second window on the same computer, with no

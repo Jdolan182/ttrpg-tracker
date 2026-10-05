@@ -30,6 +30,8 @@ class SaveCreatureRequest extends FormRequest
             'rating' => ['nullable', 'string', 'max:50'],
             'hp' => ['required', 'integer', 'min:1', 'max:100000'],
             'ac' => ['required', 'integer', 'min:0', 'max:1000'],
+            // Named like toFrontend(), so backups (which carry that shape) validate with these rules too.
+            'initiativeBonus' => ['nullable', 'integer', 'between:-100,100'],
             'speed' => ['nullable', 'string', 'max:100'],
             'stats' => ['present', 'array', 'max:30'],
             'stats.*.label' => ['required', 'string', 'max:20', 'distinct:ignore_case'],
@@ -95,6 +97,7 @@ class SaveCreatureRequest extends FormRequest
             'rating' => $data['rating'] ?? '',
             'hp' => (int) $data['hp'],
             'ac' => (int) $data['ac'],
+            'initiative_bonus' => isset($data['initiativeBonus']) ? (int) $data['initiativeBonus'] : null,
             'speed' => $data['speed'] ?? '',
             // Form inputs send numbers as strings; store real integers in the JSON.
             'stats' => array_map(fn (array $stat) => ['label' => $stat['label'], 'value' => (int) $stat['value']], $data['stats']),

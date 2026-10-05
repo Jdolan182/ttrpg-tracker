@@ -77,7 +77,7 @@ const roundsLeft = (rounds: number) => (rounds === 1 ? '1 round left' : `${round
                 :aria-current="combatant.active ? 'step' : undefined"
             >
                 <span class="w-8 shrink-0 text-right font-display tabular-nums text-muted-foreground" :class="large ? 'text-2xl' : 'text-base'">
-                    {{ combatant.initiative }}
+                    {{ combatant.initiative || '–' }}
                 </span>
                 <span
                     class="shrink-0 rounded-full"

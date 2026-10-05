@@ -3,10 +3,11 @@ import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { confirmAction } from '@/composables/useConfirm';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { SharedData } from '@/types';
-import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
-import { Castle, Plus, Swords, UsersRound } from 'lucide-vue-next';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
+import { Castle, Plus, Swords, Trash2, UsersRound } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 defineProps<{
@@ -18,6 +19,17 @@ const page = usePage<SharedData>();
 const campaignLimit = computed(() => page.props.limits?.campaigns);
 const joinedLimit = computed(() => page.props.limits?.campaigns_joined);
 const atLimit = computed(() => !!campaignLimit.value && campaignLimit.value.used >= campaignLimit.value.limit);
+
+const deleteCampaign = async (campaign: { id: number; name: string; players: number }) => {
+    const ok = await confirmAction({
+        title: `Delete "${campaign.name}"?`,
+        message: `${campaign.players ? 'Its players lose access to it. ' : ''}Its characters and encounters are kept, just no longer in a campaign.`,
+        confirmLabel: 'Delete campaign',
+        destructive: true,
+        icon: Trash2,
+    });
+    if (ok) router.delete(route('campaigns.destroy', campaign.id), { preserveScroll: true });
+};
 
 const creating = ref(false);
 const form = useForm({ name: '', description: '' });
@@ -79,20 +91,33 @@ const textareaClass =
             <section class="space-y-3">
                 <h2 class="text-lg font-semibold">You're the DM</h2>
                 <div v-if="running.length" class="grid gap-3 sm:grid-cols-2">
-                    <Link
-                        v-for="campaign in running"
-                        :key="campaign.id"
-                        :href="route('campaigns.show', campaign.id)"
-                        class="group rounded-xl border border-border bg-card p-4 shadow-sm transition-colors hover:border-primary/40"
-                    >
-                        <p class="font-display text-lg font-semibold group-hover:text-primary">{{ campaign.name }}</p>
-                        <p v-if="campaign.description" class="mt-1 line-clamp-2 text-sm text-muted-foreground">{{ campaign.description }}</p>
-                        <p class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                            <span class="inline-flex items-center gap-1"><Castle class="size-3.5" /> {{ campaign.party }} in the party</span>
-                            <span class="inline-flex items-center gap-1"><UsersRound class="size-3.5" /> {{ campaign.players }} players joined</span>
-                            <span class="inline-flex items-center gap-1"><Swords class="size-3.5" /> {{ campaign.encounters }} encounters</span>
-                        </p>
-                    </Link>
+                    <div v-for="campaign in running" :key="campaign.id" class="relative">
+                        <Link
+                            :href="route('campaigns.show', campaign.id)"
+                            class="group block h-full rounded-xl border border-border bg-card p-4 pr-12 shadow-sm transition-colors hover:border-primary/40"
+                        >
+                            <p class="font-display text-lg font-semibold group-hover:text-primary">{{ campaign.name }}</p>
+                            <p v-if="campaign.description" class="mt-1 line-clamp-2 text-sm text-muted-foreground">{{ campaign.description }}</p>
+                            <p class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                                <span class="inline-flex items-center gap-1"><Castle class="size-3.5" /> {{ campaign.party }} in the party</span>
+                                <span class="inline-flex items-center gap-1"
+                                    ><UsersRound class="size-3.5" /> {{ campaign.players }} players joined</span
+                                >
+                                <span class="inline-flex items-center gap-1"><Swords class="size-3.5" /> {{ campaign.encounters }} encounters</span>
+                            </p>
+                        </Link>
+                        <!-- Outside the link, so clicking it doesn't open the campaign -->
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            class="absolute right-2 top-2 size-8 text-muted-foreground hover:text-red-600 dark:hover:text-red-400"
+                            :title="`Delete ${campaign.name}`"
+                            :aria-label="`Delete ${campaign.name}`"
+                            @click="deleteCampaign(campaign)"
+                        >
+                            <Trash2 />
+                        </Button>
+                    </div>
                 </div>
                 <div v-else class="rounded-xl border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
                     Start a campaign to keep your party and encounters together, and invite your players to follow the fights.

@@ -30,6 +30,7 @@ class Creature extends Model
         'rating',
         'hp',
         'ac',
+        'initiative_bonus',
         'speed',
         'stats',
         'traits',
@@ -46,6 +47,7 @@ class Creature extends Model
         return [
             'hp' => 'integer',
             'ac' => 'integer',
+            'initiative_bonus' => 'integer',
             'stats' => 'array',
             'traits' => 'array',
             'actions' => 'array',
@@ -94,6 +96,8 @@ class Creature extends Model
             'rating' => $this->rating,
             'hp' => $this->hp,
             'ac' => $this->ac,
+            // Null: use DEX (or roll a plain d20 when there's no DEX).
+            'initiativeBonus' => $this->initiative_bonus,
             'speed' => $this->speed,
             'stats' => $this->stats,
             'traits' => $this->traits,

@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { confirmAction } from '@/composables/useConfirm';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { logEntry } from '@/lib/combatLog';
-import { combatantsFor, insertByInitiative } from '@/lib/encounter';
+import { combatantsFor, initiativeBonus, insertByInitiative } from '@/lib/encounter';
 import { readTracker, trackerStorageKey, writeTracker } from '@/lib/trackerStorage';
 import type { SharedData } from '@/types';
 import type { Creature, CreatureKind, CreatureSource } from '@/types/tracker';
@@ -79,7 +79,12 @@ const addToEncounter = (creature: Creature) => {
     // Rolled initiative, slotted into the existing order without re-sorting anyone else.
     const activeId = tracker.combatants[tracker.activeIndex]?.id;
     const added = combatantsFor(creature, 1, null, tracker.combatants);
-    insertByInitiative(tracker.combatants, added);
+    const byId = new Map(props.creatures.map((c) => [c.id, c]));
+    insertByInitiative(
+        tracker.combatants,
+        added,
+        (c) => initiativeBonus((c.creatureId !== null && byId.get(c.creatureId)) || { stats: c.stats }).bonus,
+    );
     tracker.activeIndex = Math.max(
         0,
         tracker.combatants.findIndex((c) => c.id === activeId),

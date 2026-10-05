@@ -56,7 +56,7 @@ If `.env` is ever left with `SHARE_MODE`/`TRUSTED_PROXIES`, restore it from `.en
   `url.intended`); resetting the token kills the old link. `enemy_hp` (bands/exact/hidden) is for the player view.
 - **Player view**: players see a campaign's fight only during combat (round ≥ 1). While a campaign encounter is
   in combat, the tracker sends it (debounced) to `campaigns.combat.update`, which stores it in `campaigns.live`.
-  That's separate from saving. End combat and Reset clear it. `live` is never sent to the frontend as is:
+  That's separate from saving. End combat clears it. `live` is never sent to the frontend as is:
   [app/Support/PlayerView.php](app/Support/PlayerView.php) drops hidden combatants and applies `enemy_hp`. It also
   filters the history (latest 150 entries): setup, hide/reveal entries and anything involving someone while they
   were hidden are removed, and enemy healing amounts are hidden unless HP is exact. Its
@@ -80,7 +80,7 @@ If `.env` is ever left with `SHARE_MODE`/`TRUSTED_PROXIES`, restore it from `.en
     keyed per user or guest. When a guest registers, their fight is copied into the new account
     ([app/Actions/ImportGuestEncounter.php](app/Actions/ImportGuestEncounter.php)).
   - Every change to the fight goes through `change(label, fn)` so it can be undone, and records history with `addLog()`.
-    Undo steps don't copy the history; they remember the newest entry. Reset is the exception and passes
+    Undo steps don't copy the history; they remember the newest entry. End combat (which puts everything back as if no fight happened) is the exception and passes
     `replacesLog`. History types and wording are in [resources/js/lib/combatLog.ts](resources/js/lib/combatLog.ts).
   - During combat the order belongs to the DM: sort only on roll, Start combat or Sort, and keep the turn with
     whoever holds it (`keepingTurn`).

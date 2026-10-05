@@ -109,6 +109,7 @@ const submitQuick = async ({ another = false } = {}) => {
     const name = quickName.value.trim();
     const hp = wholeNumber(quickHp.value, 1, 100000);
     const ac = quickAc.value === '' ? 10 : wholeNumber(quickAc.value, 0, 1000);
+    // Blank is 0: "not entered yet".
     const init = quickInitiative.value === '' ? 0 : wholeNumber(quickInitiative.value, -100, 1000);
 
     if (!name) {

@@ -210,10 +210,16 @@ const selectClass = 'h-9 min-w-0 flex-1 rounded-md border border-input bg-backgr
                     <h1 class="text-2xl font-semibold tracking-tight">{{ campaign.name }}</h1>
                     <p class="text-sm text-muted-foreground">{{ campaign.isDm ? "You're the DM" : `Run by ${campaign.dm}` }}</p>
                 </div>
-                <Button v-if="campaign.isDm && !editing" variant="outline" size="sm" @click="editing = true">
-                    <Pencil />
-                    Edit details
-                </Button>
+                <template v-if="campaign.isDm">
+                    <Button v-if="!editing" variant="outline" size="sm" @click="editing = true">
+                        <Pencil />
+                        Edit details
+                    </Button>
+                    <Button variant="outline" size="sm" class="text-red-600 dark:text-red-400" @click="deleteCampaign">
+                        <Trash2 />
+                        Delete
+                    </Button>
+                </template>
             </div>
 
             <!-- Details: edit (DM) or read -->
@@ -246,10 +252,6 @@ const selectClass = 'h-9 min-w-0 flex-1 rounded-md border border-input bg-backgr
                     </div>
                 </fieldset>
                 <div class="flex flex-wrap items-center gap-2">
-                    <Button type="button" variant="ghost" size="sm" class="text-red-600 dark:text-red-400" @click="deleteCampaign">
-                        <Trash2 />
-                        Delete campaign
-                    </Button>
                     <Button type="button" variant="outline" class="ml-auto" @click="editing = false">Cancel</Button>
                     <Button type="submit" :disabled="details.processing">Save</Button>
                 </div>

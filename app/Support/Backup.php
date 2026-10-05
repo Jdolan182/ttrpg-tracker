@@ -127,7 +127,8 @@ class Backup
         $refs = [];
         $toCreate = [];
         $reused = 0;
-        $own = $user->creatures()->get()->map(fn (Creature $c) => [$c->id, collect($c->toFrontend())->except(['id', 'source'])->all()]);
+        // Through the same normalisation as the file's creatures, so the two compare like for like.
+        $own = $user->creatures()->get()->map(fn (Creature $c) => [$c->id, SaveCreatureRequest::attributesFrom($c->toFrontend())]);
         $srd = Creature::whereNull('user_id')->pluck('id', 'name');
 
         foreach ($data['creatures'] as $index => $creature) {

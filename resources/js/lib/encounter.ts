@@ -94,7 +94,18 @@ export const restoreUses = (combatant: Combatant, creature: Creature | undefined
     }
 };
 
-export const byInitiative = (a: Combatant, b: Combatant) => b.initiative - a.initiative;
+// A combatant's initiative bonus, which needs the creatures to look up (see initiativeBonus()).
+export type BonusOf = (combatant: Combatant) => number;
+
+/**
+ * Turn order: highest initiative first; a tie goes to the higher initiative bonus (the usual table
+ * rule, since 5e leaves ties to the DM). Anyone still tied keeps their place, as sort is stable, so
+ * the DM can settle it by dragging.
+ */
+export const byInitiative =
+    (bonusOf: BonusOf) =>
+    (a: Combatant, b: Combatant): number =>
+        b.initiative - a.initiative || bonusOf(b) - bonusOf(a);
 
 // How long a condition lasts, in rounds. Counted down at the end of the affected combatant's turn,
 // so "until the end of its next turn" is 1. Null means until it's removed by hand.
@@ -119,12 +130,14 @@ export const isStable = (combatant: Combatant) =>
     combatant.side === 'player' && combatant.hp === 0 && (combatant.deathSaves?.successes ?? 0) >= 3 && !isDead(combatant);
 
 /**
- * Adds combatants without disturbing a hand-arranged order: each one goes after everyone
- * with the same or higher initiative, in front of the first lower one. Updates `list` in place.
+ * Adds combatants without disturbing a hand-arranged order: each one goes in front of the first
+ * combatant it beats (higher initiative, or the same with a higher bonus), so it lands after everyone
+ * it ties with completely. Updates `list` in place.
  */
-export const insertByInitiative = (list: Combatant[], added: Combatant[]) => {
+export const insertByInitiative = (list: Combatant[], added: Combatant[], bonusOf: BonusOf) => {
+    const compare = byInitiative(bonusOf);
     for (const combatant of added) {
-        const index = list.findIndex((c) => c.initiative < combatant.initiative);
+        const index = list.findIndex((c) => compare(c, combatant) > 0);
         list.splice(index === -1 ? list.length : index, 0, combatant);
     }
 };
@@ -136,14 +149,34 @@ export const rollDie = (sides: number) => {
     return (values[0] % sides) + 1;
 };
 
-// Uses the d20 convention: a stat called DEX or Dexterity gives the bonus. Anything else rolls a plain d20.
-// This moves onto the game system once systems are configurable.
-export const initiativeBonus = (stats: CreatureStat[] | undefined) => {
-    const dex = stats?.find((s) => ['dex', 'dexterity'].includes(s.label.trim().toLowerCase()));
-    return dex ? modifier(dex.value) : 0;
+// Whatever has initiative: a creature, or a quick-added combatant (stats only).
+interface RollsInitiative {
+    initiativeBonus?: number | null;
+    stats?: CreatureStat[];
+}
+
+/**
+ * What gets added to the d20, and where it comes from: the creature's own initiative bonus if it has
+ * one (any game system, and D&D 2024 stat blocks that print it), otherwise the d20 convention of a
+ * stat called DEX or Dexterity, otherwise nothing.
+ */
+export const initiativeBonus = (who: RollsInitiative | undefined): { bonus: number; from: 'bonus' | 'DEX' | null } => {
+    if (who?.initiativeBonus !== null && who?.initiativeBonus !== undefined) return { bonus: who.initiativeBonus, from: 'bonus' };
+    const dex = who?.stats?.find((s) => ['dex', 'dexterity'].includes(s.label.trim().toLowerCase()));
+    return dex ? { bonus: modifier(dex.value), from: 'DEX' } : { bonus: 0, from: null };
 };
 
-export const rollInitiative = (stats: CreatureStat[] | undefined) => rollDie(20) + initiativeBonus(stats);
+/** "d20 + 3 (initiative bonus)", "d20 − 1 (DEX)" or just "d20", for showing how a roll is made. */
+export const initiativeFormula = (who: RollsInitiative | undefined) => {
+    const { bonus, from } = initiativeBonus(who);
+    if (from === null) return 'd20';
+    const sign = bonus < 0 ? '−' : '+';
+    return `d20 ${sign} ${Math.abs(bonus)} (${from === 'bonus' ? 'initiative bonus' : 'DEX'})`;
+};
+
+// Can come out at 0 or below with a penalty, which is allowed. Players added without a roll get 0,
+// shown as a dash until it's filled in.
+export const rollInitiative = (who: RollsInitiative | undefined) => rollDie(20) + initiativeBonus(who).bonus;
 
 // The six d20 ability scores, offered as a starting point when typing stats in by hand.
 export const defaultStatLabels = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
@@ -200,7 +233,7 @@ export const combatantsFor = (
         creatureId: creature.id,
         name: numbered ? `${creature.name} ${sameCreature + i + 1}` : creature.name,
         side: isPlayer ? 'player' : side === 'player' ? 'enemy' : side,
-        initiative: initiative ?? (isPlayer ? 0 : rollInitiative(creature.stats)),
+        initiative: initiative ?? (isPlayer ? 0 : rollInitiative(creature)),
         hp: creature.hp,
         maxHp: creature.hp,
         ac: creature.ac,

@@ -23,6 +23,8 @@ import {
     conditionIcon,
     conditions,
     defaultStatLabels,
+    initiativeBonus,
+    initiativeFormula,
     insertByInitiative,
     isDead,
     isStable,
@@ -63,7 +65,6 @@ import {
     Pencil,
     Play,
     Plus,
-    RotateCcw,
     Save,
     ShieldPlus,
     Skull,
@@ -116,8 +117,6 @@ const selected = computed(() => combatants.value.find((c) => c.id === selectedId
 // Quick-added combatants have no creature, so no stat block or actions.
 const creatureOf = (combatant: Combatant) => (combatant.creatureId === null ? undefined : creaturesById.value.get(combatant.creatureId));
 const selectedCreature = computed(() => (selected.value ? creatureOf(selected.value) : undefined));
-// A creature's stats, or for a quick-added combatant the ones typed in for it.
-const statsOf = (combatant: Combatant) => creatureOf(combatant)?.stats ?? combatant.stats;
 
 // Unsaved-changes tracking: compare a fingerprint of the current fight with one taken when it was
 // last saved or opened. A fingerprint rather than a copy, so it can be kept in browser storage too.
@@ -144,7 +143,7 @@ const markSaved = () => {
 //
 // The history isn't copied into each step: changes only ever add entries to the end, so a step just
 // remembers the newest entry at the time and undo removes everything after it. That keeps undo small
-// however long the history gets. Reset is the one change that replaces the history, so it keeps a copy.
+// however long the history gets. End combat is the one change that replaces the history, so it keeps a copy.
 const MAX_UNDO = 100;
 interface UndoStep {
     label: string;
@@ -441,18 +440,20 @@ const deleteEncounter = async () => {
     });
 };
 
-const resetEncounter = async () => {
+// Ends the fight as if it never happened: everyone back to full HP with no conditions or used actions,
+// the history cleared, and back in setup so players stop seeing it. It replaces the history, so the
+// undo step keeps a copy and undo brings the whole fight back.
+const endCombat = async () => {
     const ok = await confirmAction({
-        title: `Reset "${name.value}" to setup?`,
-        message: 'Everyone goes back to full HP with no conditions, and the history is cleared. You can undo this.',
-        confirmLabel: 'Reset',
-        destructive: true,
-        icon: RotateCcw,
+        title: `End combat in "${name.value}"?`,
+        message: `It goes back to setup as if the fight never happened: everyone at full HP with no conditions and their actions restored, and the history cleared.${campaign.value ? ' Players stop seeing the fight.' : ''} You can undo this.`,
+        confirmLabel: 'End combat',
+        icon: Square,
     });
     if (!ok) return;
 
     change(
-        'Reset',
+        'End combat',
         () => {
             combatants.value.forEach((combatant) => {
                 combatant.hp = combatant.maxHp;
@@ -472,31 +473,6 @@ const resetEncounter = async () => {
         { replacesLog: true },
     );
     selectedId.value = null;
-    endLive();
-};
-
-// Ends the fight but keeps everyone as they are (HP, conditions), e.g. to save the aftermath or run
-// the next fight with the same party. The history is cleared so the next fight starts fresh; like
-// Reset it replaces the history, so undo brings it back. Back in setup, so players stop seeing it.
-const endCombat = async () => {
-    const ok = await confirmAction({
-        title: `End combat in "${name.value}"?`,
-        message: `HP and conditions stay as they are, the history is cleared, and it goes back to setup.${campaign.value ? ' Players stop seeing the fight.' : ''} You can undo this.`,
-        confirmLabel: 'End combat',
-        icon: Square,
-    });
-    if (!ok) return;
-
-    change(
-        'End combat',
-        () => {
-            round.value = 0;
-            activeIndex.value = 0;
-            log.value = [];
-            concentrationChecks.value = [];
-        },
-        { replacesLog: true },
-    );
     endLive();
 };
 
@@ -570,7 +546,7 @@ const pushLive = async () => {
     }
 };
 
-// Called by End combat and Reset: players stop seeing the fight straight away.
+// Called by End combat: players stop seeing the fight straight away.
 function endLive(id = campaignId.value) {
     clearTimeout(liveTimer);
     liveTimer = undefined;
@@ -625,7 +601,11 @@ const keepingTurn = (reorder: () => void) => {
     activeIndex.value = index === -1 ? 0 : index;
 };
 
-const sortKeepingTurn = () => keepingTurn(() => combatants.value.sort(byInitiative));
+// For breaking initiative ties; a quick-added combatant only has any stats typed in for it.
+const bonusOf = (combatant: Combatant) => initiativeBonus(creatureOf(combatant) ?? { stats: combatant.stats }).bonus;
+const turnOrder = byInitiative(bonusOf);
+
+const sortKeepingTurn = () => keepingTurn(() => combatants.value.sort(turnOrder));
 
 const sortByInitiative = () =>
     change('Sort', () => {
@@ -637,7 +617,8 @@ const rollAll = ({ includePlayers }: { includePlayers: boolean }) =>
     change('Roll initiative', () => {
         for (const combatant of combatants.value) {
             if (combatant.side === 'player' && !includePlayers) continue;
-            combatant.initiative = rollInitiative(statsOf(combatant));
+            // A quick-added combatant has no creature, just any stats typed in for it.
+            combatant.initiative = rollInitiative(creatureOf(combatant) ?? { stats: combatant.stats });
         }
         sortKeepingTurn();
         addLog({ type: 'initiative_rolled', detail: includePlayers ? 'everyone' : undefined });
@@ -655,7 +636,7 @@ const startCombat = () => {
     if (combatants.value.length === 0) return;
 
     change('Start combat', () => {
-        combatants.value.sort(byInitiative);
+        combatants.value.sort(turnOrder);
         round.value = 1;
         // Skip anyone already out of the fight.
         const first = combatants.value.findIndex((c) => !isOut(c));
@@ -670,7 +651,7 @@ const startCombat = () => {
 const addCombatants = (creature: Creature, count: number, initiative: number | null, side: CombatantSide) => {
     const added = combatantsFor(creature, count, initiative, combatants.value, side);
     change(`Add ${creature.name}`, () => {
-        keepingTurn(() => insertByInitiative(combatants.value, added));
+        keepingTurn(() => insertByInitiative(combatants.value, added, bonusOf));
         if (!isSetup.value) {
             for (const combatant of added) addLog({ type: 'joined', targets: [combatant.name], amount: combatant.initiative });
         }
@@ -694,7 +675,7 @@ const addParty = () => {
     change('Add party', () => {
         for (const creature of party) {
             const added = combatantsFor(creature, 1, null, combatants.value, 'player');
-            keepingTurn(() => insertByInitiative(combatants.value, added));
+            keepingTurn(() => insertByInitiative(combatants.value, added, bonusOf));
             if (!isSetup.value) addLog({ type: 'joined', targets: [added[0].name], amount: added[0].initiative });
         }
     });
@@ -726,7 +707,7 @@ watch(
 const quickAdd = (details: QuickCombatantDetails) => {
     const combatant = quickCombatant(details);
     change(`Add ${combatant.name}`, () => {
-        keepingTurn(() => insertByInitiative(combatants.value, [combatant]));
+        keepingTurn(() => insertByInitiative(combatants.value, [combatant], bonusOf));
         if (!isSetup.value) addLog({ type: 'joined', targets: [combatant.name], amount: combatant.initiative });
     });
     selectedId.value = combatant.id;
@@ -1275,20 +1256,9 @@ lastLive = livePayload();
                         <span class="font-medium">{{ active.name }}'s turn</span>
                     </template>
                 </span>
-                <Button v-if="!isSetup" variant="ghost" size="sm" title="End the fight, keeping HP and conditions as they are" @click="endCombat">
+                <Button v-if="!isSetup" variant="ghost" size="sm" title="Back to setup as if the fight never happened" @click="endCombat">
                     <Square />
                     End combat
-                </Button>
-                <Button
-                    v-if="!isSetup"
-                    variant="ghost"
-                    size="icon"
-                    class="h-8 w-8"
-                    title="Reset to setup"
-                    aria-label="Reset to setup"
-                    @click="resetEncounter"
-                >
-                    <RotateCcw />
                 </Button>
                 <Button
                     variant="ghost"
@@ -1485,14 +1455,15 @@ lastLive = livePayload();
                                 </button>
                                 <Input
                                     v-if="isSetup"
-                                    :model-value="combatant.initiative"
+                                    :model-value="combatant.initiative || ''"
                                     type="number"
+                                    placeholder="–"
                                     class="h-8 w-14 px-2 text-center tabular-nums"
                                     :aria-label="`Initiative for ${combatant.name}`"
                                     @click.stop="selectedId = combatant.id"
                                     @change="setInitiative(combatant, $event)"
                                 />
-                                <span v-else class="font-medium tabular-nums">{{ combatant.initiative }}</span>
+                                <span v-else class="font-medium tabular-nums">{{ combatant.initiative || '–' }}</span>
                                 <span class="flex min-w-0 flex-wrap items-center gap-1.5">
                                     <span
                                         class="size-2 shrink-0 rounded-full"
@@ -1743,12 +1714,16 @@ lastLive = livePayload();
                                     <span class="text-muted-foreground">Initiative</span>
                                     <Input
                                         :key="selected.id"
-                                        :model-value="selected.initiative"
+                                        :model-value="selected.initiative || ''"
                                         type="number"
+                                        placeholder="–"
                                         class="h-8 w-20"
                                         @change="setInitiative(selected, $event)"
                                     />
                                 </label>
+                                <span class="text-xs text-muted-foreground"
+                                    >Rolls {{ initiativeFormula(creatureOf(selected) ?? { stats: selected.stats }) }}</span
+                                >
                                 <Button variant="ghost" size="sm" class="ml-auto text-red-600 dark:text-red-400" @click="removeCombatant(selected)">
                                     <Trash2 />
                                     Remove

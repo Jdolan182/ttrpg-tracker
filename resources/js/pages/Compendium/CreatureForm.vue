@@ -55,6 +55,8 @@ const form = useForm({
     rating: base?.rating ?? '',
     hp: base?.hp ?? 10,
     ac: base?.ac ?? 10,
+    // Blank: use DEX (sent as null).
+    initiativeBonus: (base?.initiativeBonus ?? '') as number | string,
     speed: base?.speed ?? '30 ft.',
     stats: plainCopy(base?.stats ?? defaultStats),
     traits: plainCopy(base?.traits ?? []) as CreatureEntry[],
@@ -84,6 +86,7 @@ const submit = () => {
     const withLimits = form.transform((data) => ({
         ...data,
         campaign_id: forCampaign?.id ?? null,
+        initiativeBonus: data.initiativeBonus === '' ? null : data.initiativeBonus,
         actions: data.actions.map((action) => ({
             ...action,
             uses: action.uses === '' ? null : action.uses,
@@ -169,7 +172,7 @@ const textareaClass =
             </section>
 
             <!-- Combat numbers -->
-            <section class="grid gap-4 rounded-xl border border-border bg-card p-4 shadow-sm sm:grid-cols-3">
+            <section class="grid gap-4 rounded-xl border border-border bg-card p-4 shadow-sm sm:grid-cols-4">
                 <div class="grid gap-1.5">
                     <Label for="hp">Hit points</Label>
                     <Input id="hp" v-model="form.hp" type="number" min="1" required />
@@ -179,6 +182,19 @@ const textareaClass =
                     <Label for="ac">Armor class</Label>
                     <Input id="ac" v-model="form.ac" type="number" min="0" required />
                     <InputError :message="form.errors.ac" />
+                </div>
+                <div class="grid gap-1.5">
+                    <Label for="initiative-bonus">Initiative bonus</Label>
+                    <Input
+                        id="initiative-bonus"
+                        v-model="form.initiativeBonus"
+                        type="number"
+                        min="-100"
+                        max="100"
+                        placeholder="From DEX"
+                        title="Added to the d20. Leave blank to use DEX, or a plain d20 if there's no DEX."
+                    />
+                    <InputError :message="form.errors.initiativeBonus" />
                 </div>
                 <div class="grid gap-1.5">
                     <Label for="speed">Speed</Label>
