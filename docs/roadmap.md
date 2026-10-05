@@ -48,11 +48,15 @@ Decisions agreed for the next stretch of work, in build order. Update this as th
   websocket can't connect they poll every 5 seconds instead, which is what friends on a share link get.
   Making Reverb reachable through the share tunnel would make it instant there too.
 
-## 4. Export and import
+## 4. Export and import (done)
 
 - For backups of your own creatures and encounters, as a JSON file in our own format. No importing from
   other sites.
 - Guests can export a fight but not import (importing saves to an account).
+- As built: "Export everything" and "Import a backup" in a Backup menu on the Encounters list and the
+  Compendium, Export on each saved encounter, and the tracker's Export for the fight as it is now. Imports
+  add to what you have (never replace), are all-or-nothing, and reuse identical creatures, so importing the
+  same file twice doesn't duplicate them. A saved encounters list at /encounters came with it.
 
 ## Later
 

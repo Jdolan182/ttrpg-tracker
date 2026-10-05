@@ -11,7 +11,9 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import UseActionDialog from '@/components/UseActionDialog.vue';
+import { ask, confirmAction, confirmOpen } from '@/composables/useConfirm';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { downloadBackup, fightBackup } from '@/lib/backup';
 import { logEntry, MAX_LOG_ENTRIES, type LogEntry } from '@/lib/combatLog';
 import {
     byInitiative,
@@ -286,7 +288,45 @@ const loadEncounter = (id: number) => {
     );
 };
 
-const confirmDiscard = () => !isDirty.value || window.confirm('Discard your unsaved changes to this encounter?');
+/**
+ * Before replacing the fight in the tracker: true when it's fine to go ahead. With unsaved changes
+ * the DM can keep editing, save first (go ahead only if the save works), or discard them. Guests
+ * can't save, so they're offered an export instead.
+ */
+const confirmDiscard = async (doing: string): Promise<boolean> => {
+    const hasWork = isGuest ? combatants.value.length > 0 : isDirty.value;
+    if (!hasWork) return true;
+
+    const fightName = name.value.trim() || 'Untitled encounter';
+    const choice = await ask(
+        isGuest
+            ? {
+                  title: 'Clear this fight?',
+                  message: `${doing} clears "${fightName}". As a guest your fight is only kept in this browser, so export it first if you want a copy.`,
+                  confirmLabel: 'Clear it',
+                  cancelLabel: 'Keep it',
+                  alternativeLabel: 'Export first',
+                  destructive: true,
+              }
+            : {
+                  title: 'Discard unsaved changes?',
+                  message: `"${fightName}" has changes that haven't been saved. ${doing} loses them.`,
+                  confirmLabel: 'Discard changes',
+                  cancelLabel: 'Keep editing',
+                  alternativeLabel: 'Save first',
+                  destructive: true,
+              },
+    );
+
+    if (choice === 'alternative') {
+        if (isGuest) {
+            exportFight();
+            return true;
+        }
+        return saveEncounter();
+    }
+    return choice === 'confirm';
+};
 
 // Browser storage: the fight in progress survives a refresh for guests and signed-in users alike.
 const storageKey = trackerStorageKey(user?.id ?? null);
@@ -324,64 +364,75 @@ const persistTracker = () =>
     });
 
 // Switching encounters from the dropdown.
-const switchTo = (event: Event) => {
+const switchTo = async (event: Event) => {
     const select = event.target as HTMLSelectElement;
     const target = props.savedEncounters.find((e) => String(e.id) === select.value);
+    // Show the current one again while asking; it only changes once the new one loads.
+    select.value = encounterId.value === null ? '' : String(encounterId.value);
 
-    if (!target || !confirmDiscard()) {
-        select.value = encounterId.value === null ? '' : String(encounterId.value);
-        return;
-    }
-    loadEncounter(target.id);
+    if (target && (await confirmDiscard('Opening another encounter'))) loadEncounter(target.id);
 };
 
-const newEncounter = () => {
-    const hasWork = isGuest ? combatants.value.length > 0 : isDirty.value;
-    if (hasWork && !window.confirm(isGuest ? 'Clear this encounter and start a new one?' : 'Discard your unsaved changes to this encounter?')) return;
-    startBlank();
+const newEncounter = async () => {
+    if (await confirmDiscard('Starting a new encounter')) startBlank();
 };
 
-const saveEncounter = () => {
-    if (saving.value) return;
+/** Resolves to whether it saved, so "Save first" only carries on after a successful save. */
+const saveEncounter = (): Promise<boolean> =>
+    new Promise((resolve) => {
+        if (saving.value) return resolve(false);
 
-    const payload = {
-        name: name.value.trim() || 'Untitled encounter',
-        campaignId: campaignId.value,
-        round: round.value,
-        activeIndex: activeIndex.value,
-        combatants: combatants.value,
-        log: log.value,
-    };
-    const options = {
-        preserveScroll: true,
-        preserveState: true,
-        onStart: () => {
-            saving.value = true;
-            saveError.value = '';
-        },
-        onSuccess: () => {
-            encounterId.value = page.props.flash.savedEncounterId ?? encounterId.value;
-            name.value = payload.name;
-            markSaved();
-        },
-        onError: (errors: Record<string, string>) => {
-            saveError.value = Object.values(errors)[0] ?? "Couldn't save this encounter.";
-        },
-        onFinish: () => {
-            saving.value = false;
-        },
-    };
+        const payload = {
+            name: name.value.trim() || 'Untitled encounter',
+            campaignId: campaignId.value,
+            round: round.value,
+            activeIndex: activeIndex.value,
+            combatants: combatants.value,
+            log: log.value,
+        };
+        const options = {
+            preserveScroll: true,
+            preserveState: true,
+            onStart: () => {
+                saving.value = true;
+                saveError.value = '';
+            },
+            onSuccess: () => {
+                encounterId.value = page.props.flash.savedEncounterId ?? encounterId.value;
+                name.value = payload.name;
+                markSaved();
+                resolve(true);
+            },
+            onError: (errors: Record<string, string>) => {
+                saveError.value = Object.values(errors)[0] ?? "Couldn't save this encounter.";
+                resolve(false);
+            },
+            onCancel: () => resolve(false),
+            onFinish: () => {
+                saving.value = false;
+            },
+        };
 
-    if (encounterId.value === null) {
-        router.post(route('encounters.store'), payload, options);
-    } else {
-        router.put(route('encounters.update', encounterId.value), payload, options);
-    }
-};
+        if (encounterId.value === null) {
+            router.post(route('encounters.store'), payload, options);
+        } else {
+            router.put(route('encounters.update', encounterId.value), payload, options);
+        }
+    });
 
-const deleteEncounter = () => {
+const deleteEncounter = async () => {
     const id = encounterId.value;
-    if (id === null || !window.confirm(`Delete "${name.value}"? This can't be undone.`)) return;
+    if (
+        id === null ||
+        !(await confirmAction({
+            title: `Delete "${name.value}"?`,
+            message: "The saved encounter is deleted for good. This can't be undone.",
+            confirmLabel: 'Delete encounter',
+            destructive: true,
+            icon: Trash2,
+        }))
+    )
+        return;
 
     router.delete(route('encounters.destroy', id), {
         preserveScroll: true,
@@ -390,8 +441,15 @@ const deleteEncounter = () => {
     });
 };
 
-const resetEncounter = () => {
-    if (!window.confirm(`Reset "${name.value}" back to setup? Everyone goes back to full HP with no conditions, and the history is cleared.`)) return;
+const resetEncounter = async () => {
+    const ok = await confirmAction({
+        title: `Reset "${name.value}" to setup?`,
+        message: 'Everyone goes back to full HP with no conditions, and the history is cleared. You can undo this.',
+        confirmLabel: 'Reset',
+        destructive: true,
+        icon: RotateCcw,
+    });
+    if (!ok) return;
 
     change(
         'Reset',
@@ -417,19 +475,47 @@ const resetEncounter = () => {
     endLive();
 };
 
-// Ends the fight but keeps it as it is (HP, conditions, history), e.g. to save the aftermath.
-// Back in setup, so players stop seeing it.
-const endCombat = () => {
-    if (!window.confirm(`End combat in "${name.value}"? HP and conditions stay as they are, and players stop seeing the fight.`)) return;
-
-    change('End combat', () => {
-        addLog({ type: 'combat_ended' });
-        round.value = 0;
-        activeIndex.value = 0;
-        concentrationChecks.value = [];
+// Ends the fight but keeps everyone as they are (HP, conditions), e.g. to save the aftermath or run
+// the next fight with the same party. The history is cleared so the next fight starts fresh; like
+// Reset it replaces the history, so undo brings it back. Back in setup, so players stop seeing it.
+const endCombat = async () => {
+    const ok = await confirmAction({
+        title: `End combat in "${name.value}"?`,
+        message: `HP and conditions stay as they are, the history is cleared, and it goes back to setup.${campaign.value ? ' Players stop seeing the fight.' : ''} You can undo this.`,
+        confirmLabel: 'End combat',
+        icon: Square,
     });
+    if (!ok) return;
+
+    change(
+        'End combat',
+        () => {
+            round.value = 0;
+            activeIndex.value = 0;
+            log.value = [];
+            concentrationChecks.value = [];
+        },
+        { replacesLog: true },
+    );
     endLive();
 };
+
+// The fight as it is now, as a backup file. Built here rather than on the server so guests and
+// unsaved changes are covered.
+const exportFight = () =>
+    downloadBackup(
+        name.value.trim() || 'Untitled encounter',
+        fightBackup(
+            {
+                name: name.value.trim() || 'Untitled encounter',
+                round: round.value,
+                activeIndex: activeIndex.value,
+                combatants: combatants.value,
+                log: log.value,
+            },
+            creaturesById.value,
+        ),
+    );
 
 // --- Player view ---
 const showPlayerView = ref(false);
@@ -485,20 +571,31 @@ const pushLive = async () => {
 };
 
 // Called by End combat and Reset: players stop seeing the fight straight away.
-function endLive() {
+function endLive(id = campaignId.value) {
     clearTimeout(liveTimer);
     liveTimer = undefined;
     lastLive = '';
     liveStatus.value = 'off';
-    const id = campaignId.value;
     if (!id || isGuest) return;
     sendJson('DELETE', route('campaigns.combat.destroy', id)).catch(() => {
         // Offline: the DM can stop it from the campaign page.
     });
 }
 
-// Only changes during combat are sent. Moving the encounter to another campaign leaves the old one
-// showing its last state until the DM stops it there.
+// The campaign picker. Moving a fight in progress to another campaign (or none) takes it off the old
+// campaign's screens; the watch below then sends it to the new one. Opening a different encounter
+// doesn't go through here, so the previous campaign keeps showing its fight until it's ended.
+const pickedCampaign = computed({
+    get: () => campaignId.value,
+    set: (id: number | null) => {
+        const previous = campaignId.value;
+        if (previous === id) return;
+        if (previous && round.value > 0) endLive(previous);
+        campaignId.value = id;
+    },
+});
+
+// Only changes during combat are sent.
 watch(
     [campaignId, name, round, activeIndex, combatants, log],
     () => {
@@ -995,7 +1092,7 @@ const hpBarColor = (combatant: Combatant) => {
 // All ignored while typing or with a dialog open.
 const onKeydown = (event: KeyboardEvent) => {
     const target = event.target as HTMLElement;
-    if (addOpen.value || actionOpen.value || groupOpen.value || ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) return;
+    if (addOpen.value || actionOpen.value || groupOpen.value || confirmOpen.value || ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) return;
 
     if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === 'z') {
         event.preventDefault();
@@ -1022,17 +1119,29 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
 // "New encounter" button, or a specific encounter (?encounter=). Never lose unsaved work silently.
 const restored = restoreTracker();
 const requestedId = Number(new URLSearchParams(window.location.search).get('encounter')) || null;
-const okToReplace = () =>
-    !restored || !isDirty.value || !combatants.value.length || window.confirm('Discard your unsaved changes to this encounter?');
 
-if (props.newInCampaign) {
-    if (okToReplace()) startBlank(props.newInCampaign);
-} else if (requestedId && props.openEncounter?.id === requestedId && encounterId.value !== requestedId) {
-    if (okToReplace()) openSaved(props.openEncounter);
+// What the link asked for. Captured now: saving first reloads the page's props.
+let fromLink: (() => void) | null = null;
+const linkedEncounter = props.openEncounter;
+const linkedCampaign = props.newInCampaign;
+if (linkedCampaign) {
+    fromLink = () => startBlank(linkedCampaign);
+} else if (requestedId && linkedEncounter?.id === requestedId && encounterId.value !== requestedId) {
+    fromLink = () => openSaved(linkedEncounter);
 } else if (!restored) {
     if (props.openEncounter) openSaved(props.openEncounter);
     else startBlank();
 }
+
+// Nothing to lose (nothing restored, or an empty fight): follow the link straight away. Otherwise
+// ask once the page is up, since the dialog needs it.
+if (fromLink && (!restored || !combatants.value.length || (!isGuest && !isDirty.value))) {
+    fromLink();
+    fromLink = null;
+}
+onMounted(async () => {
+    if (fromLink && (await confirmDiscard('Following this link'))) fromLink();
+});
 const stopWaitingForHistory = router.on('navigate', () => {
     stopWaitingForHistory();
     pageInHistory = true;
@@ -1081,7 +1190,7 @@ lastLive = livePayload();
                 </span>
                 <select
                     v-if="!isGuest && (campaigns.length || campaignId !== null)"
-                    v-model="campaignId"
+                    v-model="pickedCampaign"
                     class="h-9 max-w-48 rounded-md border border-input bg-background px-2 text-sm"
                     aria-label="Campaign"
                 >
@@ -1121,7 +1230,16 @@ lastLive = livePayload();
                         <Trash2 />
                         Delete
                     </Button>
-                    <Button variant="outline" size="sm" title="Coming soon">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        :title="
+                            isGuest
+                                ? 'Save this fight as a file. Import it after making an account.'
+                                : 'Save this fight as a file, unsaved changes included'
+                        "
+                        @click="exportFight"
+                    >
                         <Download />
                         Export
                     </Button>

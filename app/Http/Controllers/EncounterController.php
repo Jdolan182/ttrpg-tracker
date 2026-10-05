@@ -57,6 +57,24 @@ class EncounterController extends Controller
         ]);
     }
 
+    /**
+     * All your saved encounters at a glance, to open, export or tidy up.
+     */
+    public function list(Request $request): Response
+    {
+        return Inertia::render('Encounters/List', [
+            'encounters' => $request->user()->encounters()->with('campaign:id,name')->latest('updated_at')->get()
+                ->map(fn (Encounter $e) => [
+                    'id' => $e->id,
+                    'name' => $e->name,
+                    'campaign' => $e->campaign ? ['id' => $e->campaign->id, 'name' => $e->campaign->name] : null,
+                    'round' => $e->round,
+                    'combatants' => array_map(fn (array $c) => ['name' => $c['name'], 'side' => $c['side'] ?? 'enemy'], $e->combatants),
+                    'updatedAt' => $e->updated_at->toIso8601String(),
+                ]),
+        ]);
+    }
+
     public function store(SaveEncounterRequest $request): RedirectResponse
     {
         Limits::ensureCanCreate($request->user(), 'encounters');
@@ -81,6 +99,7 @@ class EncounterController extends Controller
 
         $encounter->delete();
 
-        return to_route('encounters.index');
+        // Deleting happens from the tracker and from the list; stay where you were.
+        return back();
     }
 }

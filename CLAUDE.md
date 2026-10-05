@@ -1,7 +1,7 @@
 # TTRPG Tracker
 
 A system-agnostic encounter builder and combat tracker for tabletop RPGs (D&D 5e is only the default
-content). "TTRPG Tracker" is a placeholder name. Planned later: export and import, and a paid tier.
+content). "TTRPG Tracker" is a placeholder name. Planned later: a paid tier (see docs/roadmap.md).
 
 ## Stack
 
@@ -65,6 +65,12 @@ If `.env` is ever left with `SHARE_MODE`/`TRUSTED_PROXIES`, restore it from `.en
   Broadcasts (`CampaignCombatChanged` on `private-campaign.{id}`) are only a ping; viewers then fetch the view
   over HTTP (`useCampaignCombat`), and poll every 5s when the socket is down. In share mode, friends can't reach
   Reverb through the tunnel, so they rely on that polling.
+- **Backups** ([app/Support/Backup.php](app/Support/Backup.php)): JSON with `format`/`version`. Your own
+  creatures in full, SRD ones by name only; combatants point at creatures by `ref` (`c{id}`), never by
+  database id. Import is all-or-nothing, checks limits first, validates like the forms, and reuses identical
+  creatures you already have. The tracker builds the same file for the open fight in
+  [resources/js/lib/backup.ts](resources/js/lib/backup.ts) (so guests can export); keep the two in step and
+  bump `VERSION` if the shape changes. The saved encounters list is `/encounters` (`Encounters/List.vue`).
 - The tracker page ([resources/js/pages/Encounters/Index.vue](resources/js/pages/Encounters/Index.vue)):
   - Its props are the saved encounters as ids and names only, plus one full `openEncounter` (from
     `?encounter=` or the most recent). Opening another one reloads only that prop. It also gets the DM's

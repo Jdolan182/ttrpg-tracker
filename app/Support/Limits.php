@@ -85,6 +85,25 @@ class Limits
             ->all();
     }
 
+    /**
+     * Refuses to add several at once (an import) when they wouldn't all fit.
+     *
+     * @throws ValidationException
+     */
+    public static function ensureRoomFor(User $user, string $key, int $count): void
+    {
+        $room = max(0, self::limit($user, $key) - self::usage($user, $key));
+        if ($count <= $room) {
+            return;
+        }
+
+        [$what, $makeRoom] = self::WORDING[$key];
+
+        throw ValidationException::withMessages([
+            'limit' => "There's only room for {$room} more {$what}, but this backup has {$count} new ".($count === 1 ? 'one' : 'ones').". {$makeRoom}",
+        ]);
+    }
+
     public static function canCreate(User $user, string $key): bool
     {
         return self::usage($user, $key) < self::limit($user, $key);

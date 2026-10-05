@@ -1,6 +1,6 @@
 import type { PlayerViewFight } from '@/types/tracker';
 import { useConnectionStatus, useEcho } from '@laravel/echo-vue';
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 // How often to check anyway: rarely while the live connection works, often while it doesn't
 // (e.g. when shared through a tunnel that only reaches the web server, not Reverb).
@@ -35,6 +35,12 @@ export function useCampaignCombat(campaignId: number, initial: PlayerViewFight |
     };
 
     useEcho(`campaign.${campaignId}`, '.combat.changed', refresh);
+
+    // Pings sent while the connection was down (a background tab, a phone waking up, Reverb
+    // restarting) are lost, so catch up whenever it comes back.
+    watch(status, (now, before) => {
+        if (now === 'connected' && before !== 'connected') refresh();
+    });
 
     let timer: ReturnType<typeof setInterval> | undefined;
     const tick = () => {

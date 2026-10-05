@@ -51,6 +51,8 @@ class HandleInertiaRequests extends Middleware
             'flash' => [
                 // Set after saving an encounter so the tracker can switch to the saved copy.
                 'savedEncounterId' => fn () => $request->session()->get('savedEncounterId'),
+                // A one-off message after something finishes, e.g. what an import added.
+                'status' => fn () => $request->session()->get('status'),
             ],
         ]);
     }

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCampaignCombat } from '@/composables/useCampaignCombat';
+import { confirmAction } from '@/composables/useConfirm';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { SharedData } from '@/types';
 import type { Creature, EnemyHpDisplay, PlayerViewFight } from '@/types/tracker';
@@ -51,8 +52,14 @@ const props = defineProps<{
 
 // --- Combat ---
 const { fight, refresh: refreshFight } = useCampaignCombat(props.campaign.id, props.combat);
-const endCombat = () => {
-    if (!window.confirm('Stop showing this fight to your players? The encounter itself is not changed.')) return;
+const endCombat = async () => {
+    const ok = await confirmAction({
+        title: 'Stop showing this fight?',
+        message: 'Your players\' screens go back to "No fight right now". The encounter itself isn\'t changed.',
+        confirmLabel: 'Stop showing',
+        icon: Square,
+    });
+    if (!ok) return;
     router.delete(route('campaigns.combat.destroy', props.campaign.id), { preserveScroll: true, onSuccess: refreshFight });
 };
 
@@ -72,8 +79,15 @@ const saveDetails = () =>
             editing.value = false;
         },
     });
-const deleteCampaign = () => {
-    if (!window.confirm(`Delete "${props.campaign.name}"? Its characters and encounters are kept, just no longer in a campaign.`)) return;
+const deleteCampaign = async () => {
+    const ok = await confirmAction({
+        title: `Delete "${props.campaign.name}"?`,
+        message: 'Players lose access to it. Its characters and encounters are kept, just no longer in a campaign.',
+        confirmLabel: 'Delete campaign',
+        destructive: true,
+        icon: Trash2,
+    });
+    if (!ok) return;
     router.delete(route('campaigns.destroy', props.campaign.id));
 };
 
@@ -88,9 +102,14 @@ const addCharacter = () => {
     router.post(route('campaigns.party.store', props.campaign.id), { creature_id: Number(characterToAdd.value) }, { preserveScroll: true });
     characterToAdd.value = '';
 };
-const removeCharacter = (character: Creature & { claimedBy: string | null }) => {
+const removeCharacter = async (character: Creature & { claimedBy: string | null }) => {
     const note = character.claimedBy ? ` ${character.claimedBy} will need to pick another character.` : '';
-    if (!window.confirm(`Take ${character.name} out of the party? They stay in your compendium.${note}`)) return;
+    const ok = await confirmAction({
+        title: `Take ${character.name} out of the party?`,
+        message: `They stay in your compendium.${note}`,
+        confirmLabel: 'Take out',
+    });
+    if (!ok) return;
     router.delete(route('campaigns.party.destroy', [props.campaign.id, character.id]), { preserveScroll: true });
 };
 
@@ -118,8 +137,9 @@ const addEncounter = () => {
     router.post(route('campaigns.encounters.store', props.campaign.id), { encounter_id: Number(encounterToAdd.value) }, { preserveScroll: true });
     encounterToAdd.value = '';
 };
-const removeEncounter = (encounter: { id: number; name: string }) => {
-    if (!window.confirm(`Take "${encounter.name}" out of this campaign? It stays saved.`)) return;
+const removeEncounter = async (encounter: { id: number; name: string }) => {
+    const ok = await confirmAction({ title: `Take "${encounter.name}" out of this campaign?`, message: 'It stays saved.', confirmLabel: 'Take out' });
+    if (!ok) return;
     router.delete(route('campaigns.encounters.destroy', [props.campaign.id, encounter.id]), { preserveScroll: true });
 };
 
@@ -135,16 +155,35 @@ const copyInvite = async () => {
         window.prompt('Copy this invite link:', props.campaign.inviteUrl);
     }
 };
-const resetInvite = () => {
-    if (!window.confirm('Make a new invite link? The current one will stop working. Players already in the campaign stay.')) return;
+const resetInvite = async () => {
+    const ok = await confirmAction({
+        title: 'Make a new invite link?',
+        message: 'The current link stops working. Players already in the campaign stay.',
+        confirmLabel: 'New link',
+        icon: RefreshCw,
+    });
+    if (!ok) return;
     router.post(route('campaigns.invite.reset', props.campaign.id), {}, { preserveScroll: true });
 };
-const removePlayer = (player: { id: number; name: string }) => {
-    if (!window.confirm(`Remove ${player.name} from the campaign?`)) return;
+const removePlayer = async (player: { id: number; name: string }) => {
+    const ok = await confirmAction({
+        title: `Remove ${player.name} from the campaign?`,
+        message: 'They can rejoin with the invite link, unless you make a new one.',
+        confirmLabel: 'Remove',
+        destructive: true,
+    });
+    if (!ok) return;
     router.delete(route('campaigns.players.destroy', [props.campaign.id, player.id]), { preserveScroll: true });
 };
-const leave = (myId: number) => {
-    if (!window.confirm(`Leave "${props.campaign.name}"? You can rejoin with the invite link.`)) return;
+const leave = async (myId: number) => {
+    const ok = await confirmAction({
+        title: `Leave "${props.campaign.name}"?`,
+        message: 'You can rejoin with the invite link.',
+        confirmLabel: 'Leave',
+        destructive: true,
+        icon: LogOut,
+    });
+    if (!ok) return;
     router.delete(route('campaigns.players.destroy', [props.campaign.id, myId]));
 };
 const myId = usePage<SharedData>().props.auth.user?.id;

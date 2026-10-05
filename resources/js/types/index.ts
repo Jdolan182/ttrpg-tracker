@@ -25,6 +25,8 @@ export interface SharedData {
     limits: Record<'creatures' | 'encounters' | 'campaigns' | 'campaigns_joined', { used: number; limit: number }> | null;
     flash: {
         savedEncounterId: number | null;
+        // A one-off message after something finishes, e.g. what an import added.
+        status: string | null;
     };
     ziggy: {
         location: string;

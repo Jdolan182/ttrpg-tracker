@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\BackupController;
 use App\Http\Controllers\CampaignCombatController;
 use App\Http\Controllers\CampaignController;
 use App\Http\Controllers\CampaignEncounterController;
@@ -21,7 +22,12 @@ Route::get('join/{token}', [CampaignPlayerController::class, 'show'])->name('cam
 Route::inertia('player-view', 'PlayerView')->name('player-view');
 
 Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('encounters', [EncounterController::class, 'list'])->name('encounters.list');
     Route::post('encounters', [EncounterController::class, 'store'])->name('encounters.store');
+    Route::get('encounters/{encounter}/export', [BackupController::class, 'exportEncounter'])->name('encounters.export');
+
+    Route::get('backup', [BackupController::class, 'export'])->name('backup.export');
+    Route::post('backup', [BackupController::class, 'import'])->middleware('throttle:10,1')->name('backup.import');
     Route::put('encounters/{encounter}', [EncounterController::class, 'update'])->name('encounters.update');
     Route::delete('encounters/{encounter}', [EncounterController::class, 'destroy'])->name('encounters.destroy');
 

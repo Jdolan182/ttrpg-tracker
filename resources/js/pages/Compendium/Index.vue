@@ -1,7 +1,10 @@
 <script setup lang="ts">
+import BackupMenu from '@/components/BackupMenu.vue';
+import BackupNotice from '@/components/BackupNotice.vue';
 import StatBlock from '@/components/StatBlock.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { confirmAction } from '@/composables/useConfirm';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { logEntry } from '@/lib/combatLog';
 import { combatantsFor, insertByInitiative } from '@/lib/encounter';
@@ -90,8 +93,15 @@ const addToEncounter = (creature: Creature) => {
     notice.value = `Added ${creature.name} to "${tracker.name}".`;
 };
 
-const deleteCreature = (creature: Creature) => {
-    if (!window.confirm(`Delete ${creature.name}? Encounters that use it will keep its HP and AC, but lose its stat block.`)) return;
+const deleteCreature = async (creature: Creature) => {
+    const ok = await confirmAction({
+        title: `Delete ${creature.name}?`,
+        message: "Encounters that use it keep its HP and AC, but lose its stat block. This can't be undone.",
+        confirmLabel: 'Delete creature',
+        destructive: true,
+        icon: Trash2,
+    });
+    if (!ok) return;
 
     router.delete(route('creatures.destroy', creature.id), { preserveScroll: true });
 };
@@ -112,6 +122,7 @@ const deleteCreature = (creature: Creature) => {
                 >
                     {{ creatureLimit.used }} of {{ creatureLimit.limit }} creatures made
                 </span>
+                <BackupMenu v-if="!isGuest" />
                 <Button
                     size="sm"
                     :class="creatureLimit ? '' : 'ml-auto'"
@@ -124,6 +135,8 @@ const deleteCreature = (creature: Creature) => {
                     </Link>
                 </Button>
             </div>
+
+            <BackupNotice />
 
             <div class="flex flex-wrap items-center gap-3">
                 <div class="relative w-full sm:w-72">

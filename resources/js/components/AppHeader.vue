@@ -16,7 +16,7 @@ import UserMenuContent from '@/components/UserMenuContent.vue';
 import { getInitials } from '@/composables/useInitials';
 import type { NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
-import { BookOpen, Castle, Menu, Swords } from 'lucide-vue-next';
+import { BookOpen, Castle, Menu, ScrollText, Swords } from 'lucide-vue-next';
 import { computed } from 'vue';
 
 const page = usePage();
@@ -30,13 +30,14 @@ const isCurrentRoute = (url: string) => {
 
 const activeItemStyles = computed(() => (url: string) => (isCurrentRoute(url) ? 'text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100' : ''));
 
-// Campaigns need an account (you run them or join them), so guests don't see the link.
+// Saved encounters and campaigns need an account, so guests don't see those links.
 const mainNavItems = computed<NavItem[]>(() => [
     {
-        title: 'Encounters',
+        title: 'Tracker',
         href: '/',
         icon: Swords,
     },
+    ...(auth.value.user ? [{ title: 'Encounters', href: '/encounters', icon: ScrollText }] : []),
     {
         title: 'Compendium',
         href: '/compendium',

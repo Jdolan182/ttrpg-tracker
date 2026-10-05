@@ -13,6 +13,16 @@ class SaveCreatureRequest extends FormRequest
      */
     public function rules(): array
     {
+        return self::fields();
+    }
+
+    /**
+     * The rules for one creature, also used when importing a backup.
+     *
+     * @return array<string, mixed>
+     */
+    public static function fields(): array
+    {
         return [
             'kind' => ['required', Rule::in(Creature::KINDS)],
             'name' => ['required', 'string', 'max:100'],
@@ -42,6 +52,14 @@ class SaveCreatureRequest extends FormRequest
      */
     public function messages(): array
     {
+        return self::fieldMessages();
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function fieldMessages(): array
+    {
         return [
             'stats.*.label.distinct' => 'Each stat needs a different name.',
             'actions.*.name.distinct' => 'Each action needs a different name.',
@@ -56,8 +74,15 @@ class SaveCreatureRequest extends FormRequest
      */
     public function toAttributes(): array
     {
-        $data = $this->validated();
+        return self::attributesFrom($this->validated());
+    }
 
+    /**
+     * @param  array<string, mixed>  $data  Already passed fields().
+     * @return array<string, mixed>
+     */
+    public static function attributesFrom(array $data): array
+    {
         $entries = fn (array $list) => array_map(
             fn (array $entry) => ['name' => $entry['name'], 'description' => $entry['description']],
             $list,
