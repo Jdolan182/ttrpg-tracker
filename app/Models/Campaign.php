@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\PlayerView;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -35,7 +36,17 @@ class Campaign extends Model
      */
     protected $hidden = [
         'invite_token',
+        // The unfiltered fight, hidden combatants included. Players get playerView() instead.
+        'live',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'live' => 'array',
+            'live_updated_at' => 'datetime',
+        ];
+    }
 
     protected static function booted(): void
     {
@@ -80,5 +91,23 @@ class Campaign extends Model
     public function hasPlayer(?User $user): bool
     {
         return $user !== null && $this->players()->whereKey($user->id)->exists();
+    }
+
+    /**
+     * The fight in progress as players may see it, or null when there's no fight (or it's still
+     * being set up, which players never see).
+     *
+     * @return array<string, mixed>|null
+     */
+    public function playerView(): ?array
+    {
+        if (! $this->live || $this->live['round'] < 1) {
+            return null;
+        }
+
+        return [
+            ...PlayerView::fromFight($this->live, $this->enemy_hp),
+            'updatedAt' => $this->live_updated_at?->toIso8601String(),
+        ];
     }
 }

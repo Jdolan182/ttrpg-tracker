@@ -3,6 +3,7 @@ import AddCombatantDialog from '@/components/AddCombatantDialog.vue';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import CombatHistory from '@/components/CombatHistory.vue';
 import GroupDamageDialog from '@/components/GroupDamageDialog.vue';
+import PlayerCombatView from '@/components/PlayerCombatView.vue';
 import StatBlock from '@/components/StatBlock.vue';
 import StatGrid from '@/components/StatGrid.vue';
 import StatsEditor from '@/components/StatsEditor.vue';
@@ -34,6 +35,8 @@ import {
     type ActionEffect,
     type QuickCombatantDetails,
 } from '@/lib/encounter';
+import { sendJson } from '@/lib/http';
+import { HISTORY_LIMIT, playerView, playerViewStorageKey, writePlayerView } from '@/lib/playerView';
 import { rowsFromStats, statRows, statsFromRows, type StatRow } from '@/lib/stats';
 import { readTracker, trackerStorageKey, writeTracker } from '@/lib/trackerStorage';
 import { fingerprint, plainCopy } from '@/lib/utils';
@@ -48,6 +51,7 @@ import {
     ChevronDown,
     Dices,
     Download,
+    ExternalLink,
     EyeClosed,
     FilePlus2,
     Flame,
@@ -61,6 +65,7 @@ import {
     Save,
     ShieldPlus,
     Skull,
+    Square,
     Trash2,
     Undo2,
     UsersRound,
@@ -216,10 +221,11 @@ const resetView = () => {
 
 // Drops ?encounter= / ?new_in_campaign= once they've been acted on, so a later refresh doesn't
 // act on them again (e.g. reopening an encounter after the DM has moved on to a new one).
-// (Only once mounted: on page load, onMounted does it after Inertia has set up the page.)
-let mounted = false;
+// Only once Inertia has written this page into the browser history, which happens after setup;
+// changing the URL before that breaks its history handling.
+let pageInHistory = false;
 const clearUrlQuery = () => {
-    if (!mounted) return;
+    if (!pageInHistory) return;
     // A client-side visit, so Inertia's own copy of the URL changes too and doesn't put the query back.
     if (window.location.search) router.replace({ url: route('encounters.index', undefined, false), preserveState: true, preserveScroll: true });
 };
@@ -408,7 +414,110 @@ const resetEncounter = () => {
         { replacesLog: true },
     );
     selectedId.value = null;
+    endLive();
 };
+
+// Ends the fight but keeps it as it is (HP, conditions, history), e.g. to save the aftermath.
+// Back in setup, so players stop seeing it.
+const endCombat = () => {
+    if (!window.confirm(`End combat in "${name.value}"? HP and conditions stay as they are, and players stop seeing the fight.`)) return;
+
+    change('End combat', () => {
+        addLog({ type: 'combat_ended' });
+        round.value = 0;
+        activeIndex.value = 0;
+        concentrationChecks.value = [];
+    });
+    endLive();
+};
+
+// --- Player view ---
+const showPlayerView = ref(false);
+// Outside a campaign there's no setting, so enemies show as bands, the campaign default.
+const enemyHp = computed(() => campaign.value?.enemyHp ?? 'bands');
+const localPlayerView = computed(() =>
+    playerView({ name: name.value, round: round.value, activeIndex: activeIndex.value, combatants: combatants.value, log: log.value }, enemyHp.value),
+);
+
+// The same-computer second window reads this. Only the filtered view is written.
+const playerViewKey = playerViewStorageKey(user?.id ?? null);
+watch(localPlayerView, (view) => writePlayerView(playerViewKey, view), { deep: true, immediate: true });
+
+// A campaign fight goes to the campaign's own full-screen view, which also works on another device;
+// anything else to the same-computer one.
+const openPlayerWindow = () => {
+    const url = campaign.value && !isGuest ? route('campaigns.combat', campaign.value.id) : route('player-view');
+    window.open(url, 'ttrpg-player-view', 'popup,width=1280,height=800');
+};
+
+// Campaign fights also go to the server as they change, so players follow along on their own
+// devices. Separate from saving: the saved encounter only changes on Save. Debounced, since a
+// single click can change several things.
+const LIVE_DEBOUNCE_MS = 400;
+const liveStatus = ref<'off' | 'live' | 'error'>('off');
+let liveTimer: ReturnType<typeof setTimeout> | undefined;
+// What was last sent, so unchanged state (e.g. just opening the page) isn't sent again.
+let lastLive = '';
+
+const livePayload = () =>
+    JSON.stringify({
+        campaignId: campaignId.value,
+        name: name.value.trim() || 'Untitled encounter',
+        round: round.value,
+        activeIndex: activeIndex.value,
+        combatants: combatants.value,
+        // Players only get the latest part of the history, so there's no need to send it all.
+        log: log.value.slice(-HISTORY_LIMIT),
+    });
+
+const pushLive = async () => {
+    liveTimer = undefined;
+    const id = campaignId.value;
+    if (!id || round.value < 1) return;
+    const payload = livePayload();
+    lastLive = payload;
+    try {
+        const response = await sendJson('PUT', route('campaigns.combat.update', id), JSON.parse(payload));
+        liveStatus.value = response.ok ? 'live' : 'error';
+    } catch {
+        liveStatus.value = 'error';
+    }
+};
+
+// Called by End combat and Reset: players stop seeing the fight straight away.
+function endLive() {
+    clearTimeout(liveTimer);
+    liveTimer = undefined;
+    lastLive = '';
+    liveStatus.value = 'off';
+    const id = campaignId.value;
+    if (!id || isGuest) return;
+    sendJson('DELETE', route('campaigns.combat.destroy', id)).catch(() => {
+        // Offline: the DM can stop it from the campaign page.
+    });
+}
+
+// Only changes during combat are sent. Moving the encounter to another campaign leaves the old one
+// showing its last state until the DM stops it there.
+watch(
+    [campaignId, name, round, activeIndex, combatants, log],
+    () => {
+        if (isGuest || !campaignId.value || round.value < 1) {
+            if (!campaignId.value) liveStatus.value = 'off';
+            return;
+        }
+        if (livePayload() === lastLive) return;
+        clearTimeout(liveTimer);
+        liveTimer = setTimeout(pushLive, LIVE_DEBOUNCE_MS);
+    },
+    { deep: true },
+);
+// Leaving the page mid-debounce: send the last change now rather than lose it.
+onBeforeUnmount(() => {
+    if (liveTimer === undefined) return;
+    clearTimeout(liveTimer);
+    pushLive();
+});
 
 // The order is the DM's: the tracker only sorts when initiative is rolled, combat starts, or they ask it to.
 // Changing the order never moves the turn off whoever currently has it.
@@ -924,12 +1033,16 @@ if (props.newInCampaign) {
     if (props.openEncounter) openSaved(props.openEncounter);
     else startBlank();
 }
-onMounted(() => {
-    mounted = true;
+const stopWaitingForHistory = router.on('navigate', () => {
+    stopWaitingForHistory();
+    pageInHistory = true;
     clearUrlQuery();
 });
+onBeforeUnmount(stopWaitingForHistory);
 
 watch([encounterId, name, campaignId, combatants, round, activeIndex, log], persistTracker, { deep: true, immediate: true });
+// Opening the page isn't a change: players keep whatever they were shown until the DM does something.
+lastLive = livePayload();
 </script>
 
 <template>
@@ -975,6 +1088,13 @@ watch([encounterId, name, campaignId, combatants, round, activeIndex, log], pers
                     <option :value="null">No campaign</option>
                     <option v-for="c in campaigns" :key="c.id" :value="c.id">{{ c.name }}</option>
                 </select>
+                <span v-if="campaign && !isSetup && liveStatus === 'live'" class="inline-flex items-center gap-1.5 text-xs font-medium text-primary">
+                    <span class="size-2 animate-pulse rounded-full bg-primary" aria-hidden="true" />
+                    Live for players
+                </span>
+                <span v-else-if="campaign && !isSetup && liveStatus === 'error'" class="text-xs font-medium text-red-600 dark:text-red-400">
+                    Couldn't update players
+                </span>
 
                 <div class="ml-auto flex flex-wrap items-center gap-2">
                     <Button variant="outline" size="sm" @click="newEncounter">
@@ -1037,6 +1157,10 @@ watch([encounterId, name, campaignId, combatants, round, activeIndex, log], pers
                         <span class="font-medium">{{ active.name }}'s turn</span>
                     </template>
                 </span>
+                <Button v-if="!isSetup" variant="ghost" size="sm" title="End the fight, keeping HP and conditions as they are" @click="endCombat">
+                    <Square />
+                    End combat
+                </Button>
                 <Button
                     v-if="!isSetup"
                     variant="ghost"
@@ -1060,7 +1184,13 @@ watch([encounterId, name, campaignId, combatants, round, activeIndex, log], pers
                 </Button>
 
                 <div class="ml-auto flex flex-wrap items-center gap-2">
-                    <Button variant="outline" size="sm" title="Coming soon">
+                    <Button
+                        :variant="showPlayerView ? 'default' : 'outline'"
+                        size="sm"
+                        :title="showPlayerView ? 'Back to the tracker' : 'See the fight the way players see it'"
+                        :aria-pressed="showPlayerView"
+                        @click="showPlayerView = !showPlayerView"
+                    >
                         <MonitorPlay />
                         Player view
                     </Button>
@@ -1130,157 +1260,453 @@ watch([encounterId, name, campaignId, combatants, round, activeIndex, log], pers
                 to save encounters and make your own creatures.
             </p>
 
-            <!-- Concentration saves to resolve, one per hit on someone concentrating -->
-            <div
-                v-for="check in pendingChecks"
-                :key="check.key"
-                class="flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-100"
-                role="alert"
-            >
-                <Brain class="size-4 shrink-0" />
-                <span class="flex-1">
-                    <span class="font-medium">{{ check.combatant?.name }}</span> took damage while concentrating: Constitution save, DC
-                    <span class="font-semibold tabular-nums">{{ check.dc }}</span
-                    >.
-                </span>
-                <Button size="sm" variant="outline" class="h-7 bg-background" @click="resolveConcentration(check, true)">Kept it</Button>
-                <Button
-                    size="sm"
-                    variant="outline"
-                    class="h-7 bg-background text-red-600 dark:text-red-400"
-                    @click="resolveConcentration(check, false)"
-                >
-                    Lost it
-                </Button>
-            </div>
-
-            <!-- Empty state -->
-            <div v-if="combatants.length === 0" class="rounded-xl border border-dashed border-border bg-card/60 px-6 py-16 text-center">
-                <div class="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-primary/10 text-primary">
-                    <AppLogoIcon class="size-7" />
+            <!-- Player view: the DM's screen shows what players see. The turn buttons and shortcuts still work. -->
+            <div v-if="showPlayerView" class="space-y-3">
+                <div class="flex flex-wrap items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-4 py-2.5 text-sm">
+                    <MonitorPlay class="size-4 shrink-0 text-primary" />
+                    <span class="flex-1">
+                        This is what players see{{ campaign ? ` in ${campaign.name}` : '' }}. Hidden combatants are left out{{
+                            enemyHp === 'exact'
+                                ? ''
+                                : enemyHp === 'bands'
+                                  ? ' and enemy HP shows as Healthy, Bloodied or Down'
+                                  : ' and enemy HP is hidden'
+                        }}.
+                    </span>
+                    <Button size="sm" variant="outline" class="h-7 bg-background" @click="openPlayerWindow">
+                        <ExternalLink />
+                        Open in a new window
+                    </Button>
+                    <Button size="sm" variant="outline" class="h-7 bg-background" @click="showPlayerView = false">Back to the tracker</Button>
                 </div>
-                <h2 class="text-2xl font-semibold">Build your encounter</h2>
-                <p class="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-                    Add monsters, NPCs and players from your compendium, roll initiative, then start combat and step through the turns.
-                </p>
-                <Button class="mt-4" @click="addOpen = true">
-                    <Plus />
-                    Add combatant
-                </Button>
+                <PlayerCombatView :fight="localPlayerView" large empty-text="Players don't see setup. Start combat and the fight appears here." />
             </div>
 
-            <div v-else class="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
-                <!-- Initiative order -->
-                <div class="self-start overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-                    <div
-                        class="grid grid-cols-[1.25rem_3.5rem_minmax(0,1fr)_8rem_3rem] gap-3 border-b border-border bg-muted/60 px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground"
+            <template v-else>
+                <!-- Concentration saves to resolve, one per hit on someone concentrating -->
+                <div
+                    v-for="check in pendingChecks"
+                    :key="check.key"
+                    class="flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-100"
+                    role="alert"
+                >
+                    <Brain class="size-4 shrink-0" />
+                    <span class="flex-1">
+                        <span class="font-medium">{{ check.combatant?.name }}</span> took damage while concentrating: Constitution save, DC
+                        <span class="font-semibold tabular-nums">{{ check.dc }}</span
+                        >.
+                    </span>
+                    <Button size="sm" variant="outline" class="h-7 bg-background" @click="resolveConcentration(check, true)">Kept it</Button>
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        class="h-7 bg-background text-red-600 dark:text-red-400"
+                        @click="resolveConcentration(check, false)"
                     >
-                        <!-- Holds the drag-handle column; an sr-only span would drop out of the grid. -->
-                        <span aria-hidden="true" />
-                        <span>Init</span>
-                        <span>Name</span>
-                        <span>HP</span>
-                        <span class="text-right">AC</span>
-                    </div>
+                        Lost it
+                    </Button>
+                </div>
 
-                    <!-- Drag by the handle to reorder; Alt+↑/↓ moves the selected combatant. -->
-                    <VueDraggable
-                        v-model="combatants"
-                        handle=".drag-handle"
-                        :animation="150"
-                        ghost-class="opacity-40"
-                        @start="onDragStart"
-                        @end="onDragEnd"
-                    >
+                <!-- Empty state -->
+                <div v-if="combatants.length === 0" class="rounded-xl border border-dashed border-border bg-card/60 px-6 py-16 text-center">
+                    <div class="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+                        <AppLogoIcon class="size-7" />
+                    </div>
+                    <h2 class="text-2xl font-semibold">Build your encounter</h2>
+                    <p class="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+                        Add monsters, NPCs and players from your compendium, roll initiative, then start combat and step through the turns.
+                    </p>
+                    <Button class="mt-4" @click="addOpen = true">
+                        <Plus />
+                        Add combatant
+                    </Button>
+                </div>
+
+                <div v-else class="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+                    <!-- Initiative order -->
+                    <div class="self-start overflow-hidden rounded-xl border border-border bg-card shadow-sm">
                         <div
-                            v-for="(combatant, index) in combatants"
-                            :key="combatant.id"
-                            data-combatant-row
-                            class="grid w-full cursor-pointer grid-cols-[1.25rem_3.5rem_minmax(0,1fr)_8rem_3rem] items-center gap-3 border-b border-l-4 border-b-border py-3 pl-2 pr-3 text-left text-sm transition-colors last:border-b-0 hover:bg-accent"
-                            :class="[
-                                !isSetup && index === activeIndex ? 'border-l-primary bg-primary/[0.07]' : 'border-l-transparent',
-                                selected?.id === combatant.id && (isSetup || index !== activeIndex) ? 'bg-accent/70' : '',
-                                isOut(combatant) ? 'text-muted-foreground' : '',
-                            ]"
-                            @click="selectedId = combatant.id"
+                            class="grid grid-cols-[1.25rem_3.5rem_minmax(0,1fr)_8rem_3rem] gap-3 border-b border-border bg-muted/60 px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground"
                         >
-                            <button
-                                type="button"
-                                class="drag-handle flex cursor-grab touch-none items-center justify-center rounded text-muted-foreground hover:text-foreground active:cursor-grabbing"
-                                :aria-label="`Reorder ${combatant.name} (drag, or select and press Alt+Up or Alt+Down)`"
-                                @click.stop="selectedId = combatant.id"
+                            <!-- Holds the drag-handle column; an sr-only span would drop out of the grid. -->
+                            <span aria-hidden="true" />
+                            <span>Init</span>
+                            <span>Name</span>
+                            <span>HP</span>
+                            <span class="text-right">AC</span>
+                        </div>
+
+                        <!-- Drag by the handle to reorder; Alt+↑/↓ moves the selected combatant. -->
+                        <VueDraggable
+                            v-model="combatants"
+                            handle=".drag-handle"
+                            :animation="150"
+                            ghost-class="opacity-40"
+                            @start="onDragStart"
+                            @end="onDragEnd"
+                        >
+                            <div
+                                v-for="(combatant, index) in combatants"
+                                :key="combatant.id"
+                                data-combatant-row
+                                class="grid w-full cursor-pointer grid-cols-[1.25rem_3.5rem_minmax(0,1fr)_8rem_3rem] items-center gap-3 border-b border-l-4 border-b-border py-3 pl-2 pr-3 text-left text-sm transition-colors last:border-b-0 hover:bg-accent"
+                                :class="[
+                                    !isSetup && index === activeIndex ? 'border-l-primary bg-primary/[0.07]' : 'border-l-transparent',
+                                    selected?.id === combatant.id && (isSetup || index !== activeIndex) ? 'bg-accent/70' : '',
+                                    isOut(combatant) ? 'text-muted-foreground' : '',
+                                ]"
+                                @click="selectedId = combatant.id"
                             >
-                                <GripVertical class="size-4" />
-                            </button>
-                            <Input
-                                v-if="isSetup"
-                                :model-value="combatant.initiative"
-                                type="number"
-                                class="h-8 w-14 px-2 text-center tabular-nums"
-                                :aria-label="`Initiative for ${combatant.name}`"
-                                @click.stop="selectedId = combatant.id"
-                                @change="setInitiative(combatant, $event)"
-                            />
-                            <span v-else class="font-medium tabular-nums">{{ combatant.initiative }}</span>
-                            <span class="flex min-w-0 flex-wrap items-center gap-1.5">
-                                <span
-                                    class="size-2 shrink-0 rounded-full"
-                                    :class="sideInfo(combatant.side).dot"
-                                    :title="sideInfo(combatant.side).label"
-                                    aria-hidden="true"
-                                />
                                 <button
                                     type="button"
-                                    class="truncate text-left font-medium"
-                                    :class="[isOut(combatant) ? 'line-through' : '', combatant.hidden ? 'italic opacity-70' : '']"
+                                    class="drag-handle flex cursor-grab touch-none items-center justify-center rounded text-muted-foreground hover:text-foreground active:cursor-grabbing"
+                                    :aria-label="`Reorder ${combatant.name} (drag, or select and press Alt+Up or Alt+Down)`"
                                     @click.stop="selectedId = combatant.id"
                                 >
-                                    {{ combatant.name }}
+                                    <GripVertical class="size-4" />
                                 </button>
-                                <span class="sr-only">({{ sideInfo(combatant.side).label }})</span>
-                                <span v-if="combatant.side !== 'enemy'" class="text-xs" :class="sideInfo(combatant.side).text">
-                                    {{ sideInfo(combatant.side).label.toLowerCase() }}
-                                </span>
-                                <span v-if="combatant.hidden" title="Hidden from players" role="img" aria-label="Hidden from players">
-                                    <EyeClosed class="size-3.5 text-muted-foreground" aria-hidden="true" />
-                                </span>
-                                <span v-if="combatant.concentrating" title="Concentrating" role="img" aria-label="Concentrating">
-                                    <Brain class="size-3.5 text-violet-600 dark:text-violet-400" aria-hidden="true" />
-                                </span>
-                                <span
-                                    v-if="isDead(combatant)"
-                                    class="inline-flex items-center gap-0.5 text-xs font-medium text-red-700 dark:text-red-400"
-                                >
-                                    <Skull class="size-3.5" aria-hidden="true" />
-                                    dead
-                                </span>
-                                <span
-                                    v-else-if="combatant.side === 'player' && combatant.hp === 0"
-                                    class="text-xs tabular-nums"
-                                    :title="`Death saves: ${combatant.deathSaves?.successes ?? 0} successes, ${combatant.deathSaves?.failures ?? 0} failures`"
-                                >
-                                    <template v-if="isStable(combatant)"><span class="text-emerald-700 dark:text-emerald-400">stable</span></template>
-                                    <template v-else>
-                                        <span class="text-emerald-700 dark:text-emerald-400">✓{{ combatant.deathSaves?.successes ?? 0 }}</span>
-                                        <span class="ml-1 text-red-700 dark:text-red-400">✗{{ combatant.deathSaves?.failures ?? 0 }}</span>
-                                    </template>
-                                </span>
-                                <span v-if="combatant.conditions.length" class="flex items-center gap-1 text-red-600 dark:text-red-400">
+                                <Input
+                                    v-if="isSetup"
+                                    :model-value="combatant.initiative"
+                                    type="number"
+                                    class="h-8 w-14 px-2 text-center tabular-nums"
+                                    :aria-label="`Initiative for ${combatant.name}`"
+                                    @click.stop="selectedId = combatant.id"
+                                    @change="setInitiative(combatant, $event)"
+                                />
+                                <span v-else class="font-medium tabular-nums">{{ combatant.initiative }}</span>
+                                <span class="flex min-w-0 flex-wrap items-center gap-1.5">
                                     <span
-                                        v-for="condition in combatant.conditions"
+                                        class="size-2 shrink-0 rounded-full"
+                                        :class="sideInfo(combatant.side).dot"
+                                        :title="sideInfo(combatant.side).label"
+                                        aria-hidden="true"
+                                    />
+                                    <button
+                                        type="button"
+                                        class="truncate text-left font-medium"
+                                        :class="[isOut(combatant) ? 'line-through' : '', combatant.hidden ? 'italic opacity-70' : '']"
+                                        @click.stop="selectedId = combatant.id"
+                                    >
+                                        {{ combatant.name }}
+                                    </button>
+                                    <span class="sr-only">({{ sideInfo(combatant.side).label }})</span>
+                                    <span v-if="combatant.side !== 'enemy'" class="text-xs" :class="sideInfo(combatant.side).text">
+                                        {{ sideInfo(combatant.side).label.toLowerCase() }}
+                                    </span>
+                                    <span v-if="combatant.hidden" title="Hidden from players" role="img" aria-label="Hidden from players">
+                                        <EyeClosed class="size-3.5 text-muted-foreground" aria-hidden="true" />
+                                    </span>
+                                    <span v-if="combatant.concentrating" title="Concentrating" role="img" aria-label="Concentrating">
+                                        <Brain class="size-3.5 text-violet-600 dark:text-violet-400" aria-hidden="true" />
+                                    </span>
+                                    <span
+                                        v-if="isDead(combatant)"
+                                        class="inline-flex items-center gap-0.5 text-xs font-medium text-red-700 dark:text-red-400"
+                                    >
+                                        <Skull class="size-3.5" aria-hidden="true" />
+                                        dead
+                                    </span>
+                                    <span
+                                        v-else-if="combatant.side === 'player' && combatant.hp === 0"
+                                        class="text-xs tabular-nums"
+                                        :title="`Death saves: ${combatant.deathSaves?.successes ?? 0} successes, ${combatant.deathSaves?.failures ?? 0} failures`"
+                                    >
+                                        <template v-if="isStable(combatant)"
+                                            ><span class="text-emerald-700 dark:text-emerald-400">stable</span></template
+                                        >
+                                        <template v-else>
+                                            <span class="text-emerald-700 dark:text-emerald-400">✓{{ combatant.deathSaves?.successes ?? 0 }}</span>
+                                            <span class="ml-1 text-red-700 dark:text-red-400">✗{{ combatant.deathSaves?.failures ?? 0 }}</span>
+                                        </template>
+                                    </span>
+                                    <span v-if="combatant.conditions.length" class="flex items-center gap-1 text-red-600 dark:text-red-400">
+                                        <span
+                                            v-for="condition in combatant.conditions"
+                                            :key="condition"
+                                            class="inline-flex items-center"
+                                            :title="
+                                                combatant.durations?.[condition]
+                                                    ? `${condition} (${roundsLeft(combatant.durations[condition])})`
+                                                    : condition
+                                            "
+                                            role="img"
+                                            :aria-label="
+                                                combatant.durations?.[condition]
+                                                    ? `${condition}, ${roundsLeft(combatant.durations[condition])}`
+                                                    : condition
+                                            "
+                                        >
+                                            <component
+                                                :is="conditionIcon(condition)"
+                                                v-if="conditionIcon(condition)"
+                                                class="size-3.5"
+                                                aria-hidden="true"
+                                            />
+                                            <span v-else class="text-xs" aria-hidden="true">{{ condition }}</span>
+                                            <sub
+                                                v-if="combatant.durations?.[condition]"
+                                                class="text-[10px] font-medium tabular-nums"
+                                                aria-hidden="true"
+                                            >
+                                                {{ combatant.durations[condition] }}
+                                            </sub>
+                                        </span>
+                                    </span>
+                                </span>
+                                <span class="space-y-1">
+                                    <span class="block tabular-nums">
+                                        {{ combatant.hp }} / {{ combatant.maxHp }}
+                                        <span v-if="combatant.tempHp" class="text-xs font-medium text-sky-700 dark:text-sky-400" title="Temporary HP">
+                                            +{{ combatant.tempHp }}
+                                        </span>
+                                    </span>
+                                    <span class="block h-2 overflow-hidden rounded-full bg-muted">
+                                        <span
+                                            class="block h-full rounded-full"
+                                            :class="hpBarColor(combatant)"
+                                            :style="{ width: `${hpPercent(combatant)}%` }"
+                                        />
+                                    </span>
+                                </span>
+                                <span class="text-right tabular-nums">{{ combatant.ac }}</span>
+                            </div>
+                        </VueDraggable>
+                    </div>
+
+                    <!-- Right panel: the selected combatant, or the combat history -->
+                    <div class="self-start overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+                        <div class="flex border-b border-border" role="tablist" aria-label="Panel">
+                            <button
+                                type="button"
+                                role="tab"
+                                :aria-selected="panelTab === 'combatant'"
+                                class="flex-1 border-b-2 px-4 py-2 text-sm font-medium transition-colors"
+                                :class="
+                                    panelTab === 'combatant' ? 'border-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+                                "
+                                @click="panelTab = 'combatant'"
+                            >
+                                {{ selected?.name ?? 'Combatant' }}
+                            </button>
+                            <button
+                                type="button"
+                                role="tab"
+                                :aria-selected="panelTab === 'history'"
+                                class="flex-1 border-b-2 px-4 py-2 text-sm font-medium transition-colors"
+                                :class="panelTab === 'history' ? 'border-primary' : 'border-transparent text-muted-foreground hover:text-foreground'"
+                                @click="panelTab = 'history'"
+                            >
+                                History
+                                <span v-if="log.length" class="ml-1 text-xs text-muted-foreground">({{ log.length }})</span>
+                            </button>
+                        </div>
+
+                        <div v-if="panelTab === 'history'" class="max-h-[70vh] overflow-y-auto p-4">
+                            <CombatHistory :log="log" />
+                        </div>
+
+                        <div v-else-if="selected" class="space-y-4 p-4">
+                            <div class="flex items-baseline justify-between gap-2">
+                                <h2 class="text-lg font-semibold">{{ selected.name }}</h2>
+                                <span class="text-xs text-muted-foreground">{{ selected.id === active?.id ? 'Active turn' : 'Selected' }}</span>
+                            </div>
+
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="mr-2 text-sm tabular-nums">
+                                    <span class="text-muted-foreground">HP</span>
+                                    <span class="ml-1 font-medium">{{ selected.hp }} / {{ selected.maxHp }}</span>
+                                    <span
+                                        v-if="selected.tempHp"
+                                        class="ml-1 font-medium text-sky-700 dark:text-sky-400"
+                                        title="Temporary HP, used up first"
+                                    >
+                                        +{{ selected.tempHp }} temp
+                                    </span>
+                                </span>
+                                <Input
+                                    v-model="amount"
+                                    type="number"
+                                    min="1"
+                                    placeholder="0"
+                                    class="h-8 w-20"
+                                    aria-label="Damage or healing amount"
+                                    @keydown="onAmountKeydown"
+                                />
+                                <Button variant="outline" size="sm" class="text-red-600 dark:text-red-400" title="Enter" @click="applyHp(-1)"
+                                    >Damage</Button
+                                >
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    class="text-emerald-600 dark:text-emerald-400"
+                                    title="Shift + Enter"
+                                    @click="applyHp(1)"
+                                >
+                                    Heal
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    class="text-sky-700 dark:text-sky-400"
+                                    title="Give temporary HP (keeps whichever is higher)"
+                                    @click="applyTempHp"
+                                >
+                                    <ShieldPlus />
+                                    Temp HP
+                                </Button>
+                            </div>
+
+                            <!-- Death saves, for a player character who's down -->
+                            <div
+                                v-if="selected.side === 'player' && selected.hp === 0"
+                                class="rounded-lg border border-border bg-muted/50 p-3 text-sm"
+                                role="group"
+                                aria-label="Death saves"
+                            >
+                                <div class="mb-2 flex items-center justify-between gap-2">
+                                    <span class="inline-flex items-center gap-1.5 font-medium">
+                                        <HeartPulse class="size-4 text-red-600 dark:text-red-400" />
+                                        Death saves
+                                    </span>
+                                    <span v-if="isDead(selected)" class="font-medium text-red-700 dark:text-red-400">Dead</span>
+                                    <span v-else-if="isStable(selected)" class="font-medium text-emerald-700 dark:text-emerald-400">Stable</span>
+                                    <span v-else class="text-xs text-muted-foreground">Heal them to bring them back up</span>
+                                </div>
+                                <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-16 text-muted-foreground">Successes</span>
+                                        <span class="flex gap-1" aria-hidden="true">
+                                            <span
+                                                v-for="n in 3"
+                                                :key="n"
+                                                class="size-3.5 rounded-full border border-emerald-600"
+                                                :class="n <= (selected.deathSaves?.successes ?? 0) ? 'bg-emerald-600' : ''"
+                                            />
+                                        </span>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            class="h-7 px-2 text-xs"
+                                            :disabled="isDead(selected) || (selected.deathSaves?.successes ?? 0) >= 3"
+                                            @click="recordDeathSave(selected, 'success')"
+                                        >
+                                            + Success
+                                        </Button>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-16 text-muted-foreground">Failures</span>
+                                        <span class="flex gap-1" aria-hidden="true">
+                                            <span
+                                                v-for="n in 3"
+                                                :key="n"
+                                                class="size-3.5 rounded-full border border-red-600"
+                                                :class="n <= (selected.deathSaves?.failures ?? 0) ? 'bg-red-600' : ''"
+                                            />
+                                        </span>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            class="h-7 px-2 text-xs"
+                                            :disabled="isDead(selected) || isStable(selected)"
+                                            @click="recordDeathSave(selected, 'failure')"
+                                        >
+                                            + Failure
+                                        </Button>
+                                    </div>
+                                </div>
+                                <p class="sr-only">
+                                    {{ selected.deathSaves?.successes ?? 0 }} successes and {{ selected.deathSaves?.failures ?? 0 }} failures.
+                                </p>
+                            </div>
+
+                            <div class="flex flex-wrap items-center gap-2">
+                                <label class="flex items-center gap-2 text-sm">
+                                    <span class="text-muted-foreground">Initiative</span>
+                                    <Input
+                                        :key="selected.id"
+                                        :model-value="selected.initiative"
+                                        type="number"
+                                        class="h-8 w-20"
+                                        @change="setInitiative(selected, $event)"
+                                    />
+                                </label>
+                                <Button variant="ghost" size="sm" class="ml-auto text-red-600 dark:text-red-400" @click="removeCombatant(selected)">
+                                    <Trash2 />
+                                    Remove
+                                </Button>
+                            </div>
+
+                            <!-- On/off states: concentrating on a spell, hidden from the players -->
+                            <div class="flex flex-wrap gap-2">
+                                <button
+                                    type="button"
+                                    class="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors"
+                                    :class="
+                                        selected.concentrating
+                                            ? 'border-violet-500 bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-200'
+                                            : 'border-border text-muted-foreground hover:bg-accent'
+                                    "
+                                    :aria-pressed="!!selected.concentrating"
+                                    title="Concentrating on a spell: damage prompts a Constitution save"
+                                    @click="toggleConcentration(selected)"
+                                >
+                                    <Brain class="size-3.5" />
+                                    Concentrating
+                                </button>
+                                <button
+                                    type="button"
+                                    class="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors"
+                                    :class="
+                                        selected.hidden
+                                            ? 'border-foreground/40 bg-muted text-foreground'
+                                            : 'border-border text-muted-foreground hover:bg-accent'
+                                    "
+                                    :aria-pressed="!!selected.hidden"
+                                    title="Hidden from players: they won't see this combatant in the player view"
+                                    @click="toggleHidden(selected)"
+                                >
+                                    <EyeClosed class="size-3.5" />
+                                    Hidden from players
+                                </button>
+                            </div>
+
+                            <!-- Side: players are fixed, everyone else can switch mid-fight -->
+                            <div class="flex flex-wrap items-center gap-2 text-sm">
+                                <span class="text-muted-foreground">Side</span>
+                                <span v-if="selected.side === 'player'" class="inline-flex items-center gap-1.5">
+                                    <span class="size-2 rounded-full" :class="sideInfo('player').dot" aria-hidden="true" />
+                                    Player character
+                                </span>
+                                <div v-else class="flex rounded-md border border-border p-0.5" role="group" aria-label="Side">
+                                    <button
+                                        v-for="option in switchableSides"
+                                        :key="option.value"
+                                        type="button"
+                                        class="inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs transition-colors"
+                                        :class="
+                                            selected.side === option.value
+                                                ? 'bg-primary text-primary-foreground'
+                                                : 'text-muted-foreground hover:bg-accent'
+                                        "
+                                        :aria-pressed="selected.side === option.value"
+                                        @click="setSide(selected, option.value)"
+                                    >
+                                        <span class="size-2 rounded-full" :class="option.dot" aria-hidden="true" />
+                                        {{ option.label }}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Conditions: one toggle per condition -->
+                            <div class="space-y-2">
+                                <p class="text-sm text-muted-foreground">Conditions</p>
+                                <!-- Active ones, each with how long it lasts -->
+                                <ul v-if="selected.conditions.length" class="flex flex-wrap gap-1.5">
+                                    <li
+                                        v-for="condition in selected.conditions"
                                         :key="condition"
-                                        class="inline-flex items-center"
-                                        :title="
-                                            combatant.durations?.[condition]
-                                                ? `${condition} (${roundsLeft(combatant.durations[condition])})`
-                                                : condition
-                                        "
-                                        role="img"
-                                        :aria-label="
-                                            combatant.durations?.[condition]
-                                                ? `${condition}, ${roundsLeft(combatant.durations[condition])}`
-                                                : condition
-                                        "
+                                        class="inline-flex items-center gap-1 rounded-md border border-red-300 bg-red-50 py-0.5 pl-2 pr-1 text-xs text-red-800 dark:border-red-900 dark:bg-red-950/60 dark:text-red-200"
                                     >
                                         <component
                                             :is="conditionIcon(condition)"
@@ -1288,385 +1714,132 @@ watch([encounterId, name, campaignId, combatants, round, activeIndex, log], pers
                                             class="size-3.5"
                                             aria-hidden="true"
                                         />
-                                        <span v-else class="text-xs" aria-hidden="true">{{ condition }}</span>
-                                        <sub v-if="combatant.durations?.[condition]" class="text-[10px] font-medium tabular-nums" aria-hidden="true">
-                                            {{ combatant.durations[condition] }}
-                                        </sub>
-                                    </span>
-                                </span>
-                            </span>
-                            <span class="space-y-1">
-                                <span class="block tabular-nums">
-                                    {{ combatant.hp }} / {{ combatant.maxHp }}
-                                    <span v-if="combatant.tempHp" class="text-xs font-medium text-sky-700 dark:text-sky-400" title="Temporary HP">
-                                        +{{ combatant.tempHp }}
-                                    </span>
-                                </span>
-                                <span class="block h-2 overflow-hidden rounded-full bg-muted">
-                                    <span
-                                        class="block h-full rounded-full"
-                                        :class="hpBarColor(combatant)"
-                                        :style="{ width: `${hpPercent(combatant)}%` }"
-                                    />
-                                </span>
-                            </span>
-                            <span class="text-right tabular-nums">{{ combatant.ac }}</span>
-                        </div>
-                    </VueDraggable>
-                </div>
-
-                <!-- Right panel: the selected combatant, or the combat history -->
-                <div class="self-start overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-                    <div class="flex border-b border-border" role="tablist" aria-label="Panel">
-                        <button
-                            type="button"
-                            role="tab"
-                            :aria-selected="panelTab === 'combatant'"
-                            class="flex-1 border-b-2 px-4 py-2 text-sm font-medium transition-colors"
-                            :class="panelTab === 'combatant' ? 'border-primary' : 'border-transparent text-muted-foreground hover:text-foreground'"
-                            @click="panelTab = 'combatant'"
-                        >
-                            {{ selected?.name ?? 'Combatant' }}
-                        </button>
-                        <button
-                            type="button"
-                            role="tab"
-                            :aria-selected="panelTab === 'history'"
-                            class="flex-1 border-b-2 px-4 py-2 text-sm font-medium transition-colors"
-                            :class="panelTab === 'history' ? 'border-primary' : 'border-transparent text-muted-foreground hover:text-foreground'"
-                            @click="panelTab = 'history'"
-                        >
-                            History
-                            <span v-if="log.length" class="ml-1 text-xs text-muted-foreground">({{ log.length }})</span>
-                        </button>
-                    </div>
-
-                    <div v-if="panelTab === 'history'" class="max-h-[70vh] overflow-y-auto p-4">
-                        <CombatHistory :log="log" />
-                    </div>
-
-                    <div v-else-if="selected" class="space-y-4 p-4">
-                        <div class="flex items-baseline justify-between gap-2">
-                            <h2 class="text-lg font-semibold">{{ selected.name }}</h2>
-                            <span class="text-xs text-muted-foreground">{{ selected.id === active?.id ? 'Active turn' : 'Selected' }}</span>
-                        </div>
-
-                        <div class="flex flex-wrap items-center gap-2">
-                            <span class="mr-2 text-sm tabular-nums">
-                                <span class="text-muted-foreground">HP</span>
-                                <span class="ml-1 font-medium">{{ selected.hp }} / {{ selected.maxHp }}</span>
-                                <span
-                                    v-if="selected.tempHp"
-                                    class="ml-1 font-medium text-sky-700 dark:text-sky-400"
-                                    title="Temporary HP, used up first"
-                                >
-                                    +{{ selected.tempHp }} temp
-                                </span>
-                            </span>
-                            <Input
-                                v-model="amount"
-                                type="number"
-                                min="1"
-                                placeholder="0"
-                                class="h-8 w-20"
-                                aria-label="Damage or healing amount"
-                                @keydown="onAmountKeydown"
-                            />
-                            <Button variant="outline" size="sm" class="text-red-600 dark:text-red-400" title="Enter" @click="applyHp(-1)"
-                                >Damage</Button
-                            >
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                class="text-emerald-600 dark:text-emerald-400"
-                                title="Shift + Enter"
-                                @click="applyHp(1)"
-                            >
-                                Heal
-                            </Button>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                class="text-sky-700 dark:text-sky-400"
-                                title="Give temporary HP (keeps whichever is higher)"
-                                @click="applyTempHp"
-                            >
-                                <ShieldPlus />
-                                Temp HP
-                            </Button>
-                        </div>
-
-                        <!-- Death saves, for a player character who's down -->
-                        <div
-                            v-if="selected.side === 'player' && selected.hp === 0"
-                            class="rounded-lg border border-border bg-muted/50 p-3 text-sm"
-                            role="group"
-                            aria-label="Death saves"
-                        >
-                            <div class="mb-2 flex items-center justify-between gap-2">
-                                <span class="inline-flex items-center gap-1.5 font-medium">
-                                    <HeartPulse class="size-4 text-red-600 dark:text-red-400" />
-                                    Death saves
-                                </span>
-                                <span v-if="isDead(selected)" class="font-medium text-red-700 dark:text-red-400">Dead</span>
-                                <span v-else-if="isStable(selected)" class="font-medium text-emerald-700 dark:text-emerald-400">Stable</span>
-                                <span v-else class="text-xs text-muted-foreground">Heal them to bring them back up</span>
-                            </div>
-                            <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
-                                <div class="flex items-center gap-2">
-                                    <span class="w-16 text-muted-foreground">Successes</span>
-                                    <span class="flex gap-1" aria-hidden="true">
-                                        <span
-                                            v-for="n in 3"
-                                            :key="n"
-                                            class="size-3.5 rounded-full border border-emerald-600"
-                                            :class="n <= (selected.deathSaves?.successes ?? 0) ? 'bg-emerald-600' : ''"
-                                        />
-                                    </span>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        class="h-7 px-2 text-xs"
-                                        :disabled="isDead(selected) || (selected.deathSaves?.successes ?? 0) >= 3"
-                                        @click="recordDeathSave(selected, 'success')"
-                                    >
-                                        + Success
-                                    </Button>
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <span class="w-16 text-muted-foreground">Failures</span>
-                                    <span class="flex gap-1" aria-hidden="true">
-                                        <span
-                                            v-for="n in 3"
-                                            :key="n"
-                                            class="size-3.5 rounded-full border border-red-600"
-                                            :class="n <= (selected.deathSaves?.failures ?? 0) ? 'bg-red-600' : ''"
-                                        />
-                                    </span>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        class="h-7 px-2 text-xs"
-                                        :disabled="isDead(selected) || isStable(selected)"
-                                        @click="recordDeathSave(selected, 'failure')"
-                                    >
-                                        + Failure
-                                    </Button>
-                                </div>
-                            </div>
-                            <p class="sr-only">
-                                {{ selected.deathSaves?.successes ?? 0 }} successes and {{ selected.deathSaves?.failures ?? 0 }} failures.
-                            </p>
-                        </div>
-
-                        <div class="flex flex-wrap items-center gap-2">
-                            <label class="flex items-center gap-2 text-sm">
-                                <span class="text-muted-foreground">Initiative</span>
-                                <Input
-                                    :key="selected.id"
-                                    :model-value="selected.initiative"
-                                    type="number"
-                                    class="h-8 w-20"
-                                    @change="setInitiative(selected, $event)"
-                                />
-                            </label>
-                            <Button variant="ghost" size="sm" class="ml-auto text-red-600 dark:text-red-400" @click="removeCombatant(selected)">
-                                <Trash2 />
-                                Remove
-                            </Button>
-                        </div>
-
-                        <!-- On/off states: concentrating on a spell, hidden from the players -->
-                        <div class="flex flex-wrap gap-2">
-                            <button
-                                type="button"
-                                class="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors"
-                                :class="
-                                    selected.concentrating
-                                        ? 'border-violet-500 bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-200'
-                                        : 'border-border text-muted-foreground hover:bg-accent'
-                                "
-                                :aria-pressed="!!selected.concentrating"
-                                title="Concentrating on a spell: damage prompts a Constitution save"
-                                @click="toggleConcentration(selected)"
-                            >
-                                <Brain class="size-3.5" />
-                                Concentrating
-                            </button>
-                            <button
-                                type="button"
-                                class="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors"
-                                :class="
-                                    selected.hidden
-                                        ? 'border-foreground/40 bg-muted text-foreground'
-                                        : 'border-border text-muted-foreground hover:bg-accent'
-                                "
-                                :aria-pressed="!!selected.hidden"
-                                title="Hidden from players: they won't see this combatant in the player view"
-                                @click="toggleHidden(selected)"
-                            >
-                                <EyeClosed class="size-3.5" />
-                                Hidden from players
-                            </button>
-                        </div>
-
-                        <!-- Side: players are fixed, everyone else can switch mid-fight -->
-                        <div class="flex flex-wrap items-center gap-2 text-sm">
-                            <span class="text-muted-foreground">Side</span>
-                            <span v-if="selected.side === 'player'" class="inline-flex items-center gap-1.5">
-                                <span class="size-2 rounded-full" :class="sideInfo('player').dot" aria-hidden="true" />
-                                Player character
-                            </span>
-                            <div v-else class="flex rounded-md border border-border p-0.5" role="group" aria-label="Side">
-                                <button
-                                    v-for="option in switchableSides"
-                                    :key="option.value"
-                                    type="button"
-                                    class="inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs transition-colors"
-                                    :class="
-                                        selected.side === option.value
-                                            ? 'bg-primary text-primary-foreground'
-                                            : 'text-muted-foreground hover:bg-accent'
-                                    "
-                                    :aria-pressed="selected.side === option.value"
-                                    @click="setSide(selected, option.value)"
-                                >
-                                    <span class="size-2 rounded-full" :class="option.dot" aria-hidden="true" />
-                                    {{ option.label }}
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Conditions: one toggle per condition -->
-                        <div class="space-y-2">
-                            <p class="text-sm text-muted-foreground">Conditions</p>
-                            <!-- Active ones, each with how long it lasts -->
-                            <ul v-if="selected.conditions.length" class="flex flex-wrap gap-1.5">
-                                <li
-                                    v-for="condition in selected.conditions"
-                                    :key="condition"
-                                    class="inline-flex items-center gap-1 rounded-md border border-red-300 bg-red-50 py-0.5 pl-2 pr-1 text-xs text-red-800 dark:border-red-900 dark:bg-red-950/60 dark:text-red-200"
-                                >
-                                    <component :is="conditionIcon(condition)" v-if="conditionIcon(condition)" class="size-3.5" aria-hidden="true" />
-                                    <span class="font-medium">{{ condition }}</span>
-                                    <select
-                                        :value="selected.durations?.[condition] ?? ''"
-                                        class="h-6 rounded border-0 bg-transparent py-0 pl-1 pr-6 text-xs focus:ring-1 focus:ring-red-400"
-                                        :aria-label="`How long ${condition} lasts`"
-                                        @change="
-                                            setConditionDuration(
-                                                selected,
-                                                condition,
-                                                ($event.target as HTMLSelectElement).value === ''
-                                                    ? null
-                                                    : Number(($event.target as HTMLSelectElement).value),
-                                            )
-                                        "
-                                    >
-                                        <option v-for="option in conditionDurations" :key="option.label" :value="option.value ?? ''">
-                                            {{ option.label }}
-                                        </option>
-                                        <!-- A count that's ticked down to something not in the list still shows correctly -->
-                                        <option
-                                            v-if="
-                                                selected.durations?.[condition] &&
-                                                !conditionDurations.some((o) => o.value === selected.durations?.[condition])
+                                        <span class="font-medium">{{ condition }}</span>
+                                        <select
+                                            :value="selected.durations?.[condition] ?? ''"
+                                            class="h-6 rounded border-0 bg-transparent py-0 pl-1 pr-6 text-xs focus:ring-1 focus:ring-red-400"
+                                            :aria-label="`How long ${condition} lasts`"
+                                            @change="
+                                                setConditionDuration(
+                                                    selected,
+                                                    condition,
+                                                    ($event.target as HTMLSelectElement).value === ''
+                                                        ? null
+                                                        : Number(($event.target as HTMLSelectElement).value),
+                                                )
                                             "
-                                            :value="selected.durations[condition]"
                                         >
-                                            {{ roundsLeft(selected.durations[condition]) }}
-                                        </option>
-                                    </select>
-                                </li>
-                            </ul>
-                            <div class="flex flex-wrap gap-1.5" role="group" aria-label="Conditions">
-                                <button
-                                    v-for="condition in conditions"
-                                    :key="condition.name"
-                                    type="button"
-                                    class="inline-flex size-9 items-center justify-center rounded-md border transition-colors"
-                                    :class="
-                                        selected.conditions.includes(condition.name)
-                                            ? 'border-red-500 bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300'
-                                            : 'border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                                    "
-                                    :title="condition.name"
-                                    :aria-label="condition.name"
-                                    :aria-pressed="selected.conditions.includes(condition.name)"
-                                    @click="toggleCondition(selected, condition.name)"
-                                >
-                                    <component :is="condition.icon" class="size-4" />
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Actions: use one to record it (and any damage or healing) in the history -->
-                        <section v-if="selectedCreature?.actions.length" class="space-y-2 border-t border-border pt-4">
-                            <div class="flex items-baseline justify-between">
-                                <h3 class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Actions</h3>
-                                <span v-if="isSetup" class="text-xs text-muted-foreground">Start combat to use actions</span>
-                            </div>
-                            <div
-                                v-for="action in selectedCreature.actions"
-                                :key="action.name"
-                                class="flex items-start gap-3 rounded-md border border-border p-2.5"
-                            >
-                                <div class="min-w-0 flex-1 text-sm">
-                                    <p class="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                        <span class="font-medium">{{ action.name }}</span>
-                                        <template v-if="action.uses">
-                                            <span
-                                                v-if="action.uses <= 10"
-                                                class="flex gap-0.5"
-                                                role="img"
-                                                :aria-label="`${usesLeft(selected, action)} of ${action.uses} uses left`"
+                                            <option v-for="option in conditionDurations" :key="option.label" :value="option.value ?? ''">
+                                                {{ option.label }}
+                                            </option>
+                                            <!-- A count that's ticked down to something not in the list still shows correctly -->
+                                            <option
+                                                v-if="
+                                                    selected.durations?.[condition] &&
+                                                    !conditionDurations.some((o) => o.value === selected.durations?.[condition])
+                                                "
+                                                :value="selected.durations[condition]"
                                             >
-                                                <span
-                                                    v-for="n in action.uses"
-                                                    :key="n"
-                                                    class="size-2 rounded-full border border-primary"
-                                                    :class="n <= (usesLeft(selected, action) ?? 0) ? 'bg-primary' : ''"
-                                                />
-                                            </span>
-                                            <span class="text-xs text-muted-foreground">
-                                                {{ usesLeft(selected, action) }}/{{ action.uses }} left · {{ limitLabel(action) }}
-                                            </span>
-                                        </template>
-                                    </p>
-                                    <p class="mt-0.5 line-clamp-2 text-muted-foreground" :title="action.description">{{ action.description }}</p>
+                                                {{ roundsLeft(selected.durations[condition]) }}
+                                            </option>
+                                        </select>
+                                    </li>
+                                </ul>
+                                <div class="flex flex-wrap gap-1.5" role="group" aria-label="Conditions">
+                                    <button
+                                        v-for="condition in conditions"
+                                        :key="condition.name"
+                                        type="button"
+                                        class="inline-flex size-9 items-center justify-center rounded-md border transition-colors"
+                                        :class="
+                                            selected.conditions.includes(condition.name)
+                                                ? 'border-red-500 bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300'
+                                                : 'border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                                        "
+                                        :title="condition.name"
+                                        :aria-label="condition.name"
+                                        :aria-pressed="selected.conditions.includes(condition.name)"
+                                        @click="toggleCondition(selected, condition.name)"
+                                    >
+                                        <component :is="condition.icon" class="size-4" />
+                                    </button>
                                 </div>
-                                <Button v-if="!isSetup" variant="outline" size="sm" @click="openAction(selected, action)">Use</Button>
                             </div>
-                        </section>
 
-                        <StatBlock v-if="selectedCreature" :creature="selectedCreature" hide-actions class="border-t border-border pt-4" />
-                        <!-- Quick-added: its own stats, editable, since there's no compendium entry behind it -->
-                        <section v-else-if="selected.creatureId === null" class="space-y-3 border-t border-border pt-4">
-                            <div class="flex items-baseline justify-between gap-2">
-                                <h3 class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Stats</h3>
-                                <Button v-if="!editingStats" variant="ghost" size="sm" class="h-7 px-2 text-xs" @click="startEditingStats(selected)">
-                                    <Pencil />
-                                    {{ selected.stats?.length ? 'Edit stats' : 'Add stats' }}
-                                </Button>
-                            </div>
-                            <template v-if="editingStats">
-                                <StatsEditor v-model="statDraft" />
-                                <div class="flex justify-end gap-2">
-                                    <Button variant="outline" size="sm" @click="editingStats = false">Cancel</Button>
-                                    <Button size="sm" @click="saveStats(selected)">Save stats</Button>
+                            <!-- Actions: use one to record it (and any damage or healing) in the history -->
+                            <section v-if="selectedCreature?.actions.length" class="space-y-2 border-t border-border pt-4">
+                                <div class="flex items-baseline justify-between">
+                                    <h3 class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Actions</h3>
+                                    <span v-if="isSetup" class="text-xs text-muted-foreground">Start combat to use actions</span>
                                 </div>
-                            </template>
-                            <StatGrid v-else-if="selected.stats?.length" :stats="selected.stats" />
-                            <p v-else class="text-sm text-muted-foreground">
-                                No stats yet. Add some to see their modifiers, and DEX will count when you roll initiative.
+                                <div
+                                    v-for="action in selectedCreature.actions"
+                                    :key="action.name"
+                                    class="flex items-start gap-3 rounded-md border border-border p-2.5"
+                                >
+                                    <div class="min-w-0 flex-1 text-sm">
+                                        <p class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                            <span class="font-medium">{{ action.name }}</span>
+                                            <template v-if="action.uses">
+                                                <span
+                                                    v-if="action.uses <= 10"
+                                                    class="flex gap-0.5"
+                                                    role="img"
+                                                    :aria-label="`${usesLeft(selected, action)} of ${action.uses} uses left`"
+                                                >
+                                                    <span
+                                                        v-for="n in action.uses"
+                                                        :key="n"
+                                                        class="size-2 rounded-full border border-primary"
+                                                        :class="n <= (usesLeft(selected, action) ?? 0) ? 'bg-primary' : ''"
+                                                    />
+                                                </span>
+                                                <span class="text-xs text-muted-foreground">
+                                                    {{ usesLeft(selected, action) }}/{{ action.uses }} left · {{ limitLabel(action) }}
+                                                </span>
+                                            </template>
+                                        </p>
+                                        <p class="mt-0.5 line-clamp-2 text-muted-foreground" :title="action.description">{{ action.description }}</p>
+                                    </div>
+                                    <Button v-if="!isSetup" variant="outline" size="sm" @click="openAction(selected, action)">Use</Button>
+                                </div>
+                            </section>
+
+                            <StatBlock v-if="selectedCreature" :creature="selectedCreature" hide-actions class="border-t border-border pt-4" />
+                            <!-- Quick-added: its own stats, editable, since there's no compendium entry behind it -->
+                            <section v-else-if="selected.creatureId === null" class="space-y-3 border-t border-border pt-4">
+                                <div class="flex items-baseline justify-between gap-2">
+                                    <h3 class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Stats</h3>
+                                    <Button
+                                        v-if="!editingStats"
+                                        variant="ghost"
+                                        size="sm"
+                                        class="h-7 px-2 text-xs"
+                                        @click="startEditingStats(selected)"
+                                    >
+                                        <Pencil />
+                                        {{ selected.stats?.length ? 'Edit stats' : 'Add stats' }}
+                                    </Button>
+                                </div>
+                                <template v-if="editingStats">
+                                    <StatsEditor v-model="statDraft" />
+                                    <div class="flex justify-end gap-2">
+                                        <Button variant="outline" size="sm" @click="editingStats = false">Cancel</Button>
+                                        <Button size="sm" @click="saveStats(selected)">Save stats</Button>
+                                    </div>
+                                </template>
+                                <StatGrid v-else-if="selected.stats?.length" :stats="selected.stats" />
+                                <p v-else class="text-sm text-muted-foreground">
+                                    No stats yet. Add some to see their modifiers, and DEX will count when you roll initiative.
+                                </p>
+                            </section>
+                            <p v-else class="border-t border-border pt-4 text-sm text-muted-foreground">
+                                This creature is no longer in your compendium, so its stat block isn't available.
                             </p>
-                        </section>
-                        <p v-else class="border-t border-border pt-4 text-sm text-muted-foreground">
-                            This creature is no longer in your compendium, so its stat block isn't available.
-                        </p>
+                        </div>
                     </div>
                 </div>
-            </div>
+            </template>
 
             <p class="text-xs text-muted-foreground">
                 Shortcuts: <kbd class="rounded border px-1">N</kbd> next turn, <kbd class="rounded border px-1">P</kbd> previous turn,

@@ -89,6 +89,8 @@ class CampaignController extends Controller
                 'name' => $p->name,
                 'characterId' => $p->pivot->character_id,
             ]),
+            // The fight in progress, as players see it (the DM too, to check what's on show).
+            'combat' => $campaign->playerView(),
             // The current player's own claim, so they can change it.
             'myCharacterId' => $isDm ? null : $players->firstWhere('id', $user->id)?->pivot->character_id,
             // DM-only lists for running the campaign.

@@ -1,14 +1,31 @@
 <script setup lang="ts">
 import InputError from '@/components/InputError.vue';
+import PlayerCombatView from '@/components/PlayerCombatView.vue';
 import StatBlock from '@/components/StatBlock.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useCampaignCombat } from '@/composables/useCampaignCombat';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { SharedData } from '@/types';
-import type { Creature, EnemyHpDisplay } from '@/types/tracker';
+import type { Creature, EnemyHpDisplay, PlayerViewFight } from '@/types/tracker';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { ArrowLeft, Check, ChevronDown, Copy, LogOut, Pencil, Plus, RefreshCw, Swords, Trash2, UserPlus, X } from 'lucide-vue-next';
+import {
+    ArrowLeft,
+    Check,
+    ChevronDown,
+    Copy,
+    LogOut,
+    Maximize2,
+    Pencil,
+    Plus,
+    RefreshCw,
+    Square,
+    Swords,
+    Trash2,
+    UserPlus,
+    X,
+} from 'lucide-vue-next';
 import { ref } from 'vue';
 
 const props = defineProps<{
@@ -29,7 +46,15 @@ const props = defineProps<{
     encounters: { id: number; name: string; round: number; updatedAt: string }[];
     availableEncounters: { id: number; name: string }[];
     availableCharacters: { id: number; name: string; campaign_id: number | null }[];
+    combat: PlayerViewFight | null;
 }>();
+
+// --- Combat ---
+const { fight, refresh: refreshFight } = useCampaignCombat(props.campaign.id, props.combat);
+const endCombat = () => {
+    if (!window.confirm('Stop showing this fight to your players? The encounter itself is not changed.')) return;
+    router.delete(route('campaigns.combat.destroy', props.campaign.id), { preserveScroll: true, onSuccess: refreshFight });
+};
 
 const enemyHpOptions: { value: EnemyHpDisplay; label: string; hint: string }[] = [
     { value: 'bands', label: 'Bands', hint: 'Healthy, Bloodied or Down' },
@@ -194,10 +219,36 @@ const selectClass = 'h-9 min-w-0 flex-1 rounded-md border border-input bg-backgr
                 <p class="whitespace-pre-line text-sm">{{ campaign.description }}</p>
             </section>
 
-            <!-- Players: the active combat appears here in a later step -->
-            <p v-if="!campaign.isDm" class="rounded-xl border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
-                When {{ campaign.dm }} starts a fight in this campaign, you'll be able to follow it here.
-            </p>
+            <!-- The fight in progress, live, as players see it -->
+            <section class="space-y-3">
+                <div class="flex flex-wrap items-center gap-2">
+                    <h2 class="text-lg font-semibold">Combat</h2>
+                    <span v-if="fight" class="inline-flex items-center gap-1.5 text-xs font-medium text-primary">
+                        <span class="size-2 animate-pulse rounded-full bg-primary" aria-hidden="true" />
+                        Live
+                    </span>
+                    <div class="ml-auto flex flex-wrap gap-2">
+                        <Button v-if="campaign.isDm && fight" variant="outline" size="sm" @click="endCombat">
+                            <Square />
+                            Stop showing
+                        </Button>
+                        <Button variant="outline" size="sm" as-child>
+                            <Link :href="route('campaigns.combat', campaign.id)">
+                                <Maximize2 />
+                                Full screen
+                            </Link>
+                        </Button>
+                    </div>
+                </div>
+                <PlayerCombatView
+                    :fight="fight"
+                    :empty-text="
+                        campaign.isDm
+                            ? 'Start combat on an encounter in this campaign and your players see it here, live. Hidden combatants stay hidden.'
+                            : `No fight right now. When ${campaign.dm} starts combat, you can follow it here.`
+                    "
+                />
+            </section>
 
             <div class="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
                 <!-- Party -->

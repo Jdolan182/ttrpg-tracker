@@ -28,7 +28,8 @@ export type LogEntryType =
     | 'stabilized'
     | 'died'
     | 'hidden'
-    | 'revealed';
+    | 'revealed'
+    | 'combat_ended';
 
 export interface LogEntry {
     id: string;
@@ -76,8 +77,9 @@ export const describe = (entry: LogEntry): string => {
             return entry.detail === 'back' ? `Went back to ${entry.actor}'s turn` : `${entry.actor}'s turn`;
         case 'damage':
             return `${targets} took ${entry.amount} damage`;
+        // The amount is left out of what players see when enemy HP is kept from them.
         case 'heal':
-            return `${targets} regained ${entry.amount} HP`;
+            return entry.amount === undefined ? `${targets} regained HP` : `${targets} regained ${entry.amount} HP`;
         case 'down':
             return `${targets} went down`;
         case 'defeated':
@@ -108,7 +110,7 @@ export const describe = (entry: LogEntry): string => {
         case 'condition_expired':
             return `${targets} is no longer ${entry.detail} (it wore off)`;
         case 'temp_hp':
-            return `${targets} gained ${entry.amount} temporary HP`;
+            return entry.amount === undefined ? `${targets} gained temporary HP` : `${targets} gained ${entry.amount} temporary HP`;
         case 'concentration':
             if (entry.detail === 'start') return `${targets} started concentrating`;
             if (entry.detail === 'kept') return `${targets} kept concentration (DC ${entry.amount})`;
@@ -126,6 +128,8 @@ export const describe = (entry: LogEntry): string => {
             return `${targets} was hidden from players`;
         case 'revealed':
             return `${targets} was revealed to players`;
+        case 'combat_ended':
+            return 'Combat ended';
     }
 };
 

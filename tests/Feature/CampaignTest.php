@@ -427,7 +427,7 @@ class CampaignTest extends TestCase
 
         $this->actingAs($campaign->owner)->get("/?new_in_campaign={$campaign->id}")
             ->assertInertia(fn (Assert $page) => $page
-                ->where('campaigns', [['id' => $campaign->id, 'name' => 'Crimson Keep', 'partyIds' => [$hero->id]]])
+                ->where('campaigns', [['id' => $campaign->id, 'name' => 'Crimson Keep', 'enemyHp' => 'bands', 'partyIds' => [$hero->id]]])
                 ->where('newInCampaign', $campaign->id)
             );
 

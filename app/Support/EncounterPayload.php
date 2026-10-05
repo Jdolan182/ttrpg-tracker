@@ -24,6 +24,7 @@ class EncounterPayload
         'combat_started', 'round', 'turn', 'damage', 'heal', 'down', 'defeated', 'revived',
         'condition_on', 'condition_off', 'side', 'action', 'joined', 'removed', 'moved', 'sorted', 'initiative_rolled',
         'condition_expired', 'temp_hp', 'concentration', 'death_save', 'stabilized', 'died', 'hidden', 'revealed',
+        'combat_ended',
     ];
 
     /**

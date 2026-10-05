@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\CampaignCombatController;
 use App\Http\Controllers\CampaignController;
 use App\Http\Controllers\CampaignEncounterController;
 use App\Http\Controllers\CampaignPartyController;
@@ -14,6 +15,10 @@ Route::get('compendium', [CreatureController::class, 'index'])->name('compendium
 
 // Invite links work for guests too: the page asks them to log in or sign up, then brings them back.
 Route::get('join/{token}', [CampaignPlayerController::class, 'show'])->name('campaigns.join');
+
+// Player view in a second window on the same computer, fed by the tracker through browser storage,
+// so it works for guests and for fights outside a campaign.
+Route::inertia('player-view', 'PlayerView')->name('player-view');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('encounters', [EncounterController::class, 'store'])->name('encounters.store');
@@ -39,7 +44,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('campaigns/{campaign}/encounters', [CampaignEncounterController::class, 'store'])->name('campaigns.encounters.store');
     Route::delete('campaigns/{campaign}/encounters/{encounter}', [CampaignEncounterController::class, 'destroy'])->name('campaigns.encounters.destroy');
 
-    Route::post('join/{token}', [CampaignPlayerController::class, 'store'])->name('campaigns.join.store');
+    Route::get('campaigns/{campaign}/combat', [CampaignCombatController::class, 'show'])->name('campaigns.combat');
+    // The tracker sends every change (debounced), so this allows plenty.
+    Route::put('campaigns/{campaign}/combat', [CampaignCombatController::class, 'update'])->middleware('throttle:300,1')->name('campaigns.combat.update');
+    Route::delete('campaigns/{campaign}/combat', [CampaignCombatController::class, 'destroy'])->name('campaigns.combat.destroy');
+
+    Route::post('join/{token}',[CampaignPlayerController::class, 'store'])->name('campaigns.join.store');
     Route::put('campaigns/{campaign}/character', [CampaignPlayerController::class, 'claim'])->name('campaigns.character.claim');
     Route::delete('campaigns/{campaign}/players/{player}', [CampaignPlayerController::class, 'destroy'])->name('campaigns.players.destroy');
 });

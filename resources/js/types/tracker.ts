@@ -79,7 +79,38 @@ export type EnemyHpDisplay = 'bands' | 'exact' | 'hidden';
 export interface TrackerCampaign {
     id: number;
     name: string;
+    enemyHp: EnemyHpDisplay;
     partyIds: number[];
+}
+
+// How a combatant is doing, for players. Dying, stable and dead are player characters at 0 HP.
+export type HealthStatus = 'healthy' | 'bloodied' | 'down' | 'dying' | 'stable' | 'dead';
+
+// One combatant as players see it. Mirrors App\Support\PlayerView: HP numbers and status are null
+// when the campaign keeps them from players.
+export interface PlayerViewCombatant {
+    id: string;
+    name: string;
+    side: CombatantSide;
+    initiative: number;
+    active: boolean;
+    hp: number | null;
+    maxHp: number | null;
+    tempHp: number | null;
+    status: HealthStatus | null;
+    conditions: { name: string; rounds: number | null }[];
+    concentrating: boolean;
+}
+
+// A fight as players see it: hidden combatants already left out.
+export interface PlayerViewFight {
+    name: string;
+    round: number;
+    combatants: PlayerViewCombatant[];
+    // The latest part of the history, filtered for players.
+    log: LogEntry[];
+    // When the DM last changed it; only on fights that come from the server.
+    updatedAt?: string | null;
 }
 
 // A saved encounter in the tracker's list; the full thing is loaded when it's opened.

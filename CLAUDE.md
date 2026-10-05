@@ -1,13 +1,12 @@
 # TTRPG Tracker
 
 A system-agnostic encounter builder and combat tracker for tabletop RPGs (D&D 5e is only the default
-content). "TTRPG Tracker" is a placeholder name. Planned later: campaign features, a live player view,
-export, and a paid tier.
+content). "TTRPG Tracker" is a placeholder name. Planned later: export and import, and a paid tier.
 
 ## Stack
 
 Laravel 12 + Inertia + Vue 3 (TypeScript, `<script setup>`) + Tailwind 3.4 + shadcn-vue components
-(`resources/js/components/ui`), PostgreSQL 18, Reverb (installed, not used yet). Runs in Docker via
+(`resources/js/components/ui`), PostgreSQL 18, Reverb (websockets, for the live player view). Runs in Docker via
 Sail inside WSL2 (Ubuntu); the project lives on the Linux filesystem at `~/projects/ttrpg-tracker`.
 
 ## Running it
@@ -55,6 +54,17 @@ If `.env` is ever left with `SHARE_MODE`/`TRUSTED_PROXIES`, restore it from `.en
   The party is the DM's player creatures with that `campaign_id`; encounters join the same way. Deleting a
   campaign keeps both. Players join at `/join/{invite_token}` (guests log in or register and come back via
   `url.intended`); resetting the token kills the old link. `enemy_hp` (bands/exact/hidden) is for the player view.
+- **Player view**: players see a campaign's fight only during combat (round ≥ 1). While a campaign encounter is
+  in combat, the tracker sends it (debounced) to `campaigns.combat.update`, which stores it in `campaigns.live`.
+  That's separate from saving. End combat and Reset clear it. `live` is never sent to the frontend as is:
+  [app/Support/PlayerView.php](app/Support/PlayerView.php) drops hidden combatants and applies `enemy_hp`. It also
+  filters the history (latest 150 entries): setup, hide/reveal entries and anything involving someone while they
+  were hidden are removed, and enemy healing amounts are hidden unless HP is exact. Its
+  TS mirror [resources/js/lib/playerView.ts](resources/js/lib/playerView.ts) covers the DM's own Player view and
+  the same-computer `/player-view` window, fed through localStorage. Change both together.
+  Broadcasts (`CampaignCombatChanged` on `private-campaign.{id}`) are only a ping; viewers then fetch the view
+  over HTTP (`useCampaignCombat`), and poll every 5s when the socket is down. In share mode, friends can't reach
+  Reverb through the tunnel, so they rely on that polling.
 - The tracker page ([resources/js/pages/Encounters/Index.vue](resources/js/pages/Encounters/Index.vue)):
   - Its props are the saved encounters as ids and names only, plus one full `openEncounter` (from
     `?encounter=` or the most recent). Opening another one reloads only that prop. It also gets the DM's

@@ -32,7 +32,7 @@ Decisions agreed for the next stretch of work, in build order. Update this as th
 - Per-campaign setting for what players see of enemy HP: bands by default (Healthy, Bloodied, Down),
   exact numbers, or nothing.
 
-## 3. Player view
+## 3. Player view (done)
 
 - Players see a campaign's encounter while it's in active combat: from Start combat until combat ends
   (a new End combat button, or Reset). Setup is never shown.
@@ -43,6 +43,10 @@ Decisions agreed for the next stretch of work, in build order. Update this as th
 - Hidden combatants never reach players' devices: the server removes them (and applies the HP setting)
   before anything is broadcast. Live updates go over Reverb.
 - View-only for now. Players entering initiative and updating their own character comes later.
+- As built: the tracker sends a campaign fight to the server as it changes, separately from Save.
+  Broadcasts are only a "changed" ping, and viewers fetch the filtered view over HTTP. When the
+  websocket can't connect they poll every 5 seconds instead, which is what friends on a share link get.
+  Making Reverb reachable through the share tunnel would make it instant there too.
 
 ## 4. Export and import
 
