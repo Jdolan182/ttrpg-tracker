@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import AppLogo from '@/components/AppLogo.vue';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
+import ThemeToggle from '@/components/ThemeToggle.vue';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -14,12 +15,12 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import UserMenuContent from '@/components/UserMenuContent.vue';
 import { getInitials } from '@/composables/useInitials';
-import type { NavItem } from '@/types';
+import type { NavItem, SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
 import { BookOpen, Castle, Menu, ScrollText, Swords } from 'lucide-vue-next';
 import { computed } from 'vue';
 
-const page = usePage();
+const page = usePage<SharedData>();
 const auth = computed(() => page.props.auth);
 
 // Active when on the item's page or any page beneath it, e.g. /compendium/goblin.
@@ -105,17 +106,18 @@ const mainNavItems = computed<NavItem[]>(() => [
                     </NavigationMenu>
                 </div>
 
-                <div v-if="!auth.user" class="ml-auto flex items-center gap-2">
-                    <Button variant="ghost" size="sm" as-child>
-                        <Link :href="route('login')">Log in</Link>
-                    </Button>
-                    <Button size="sm" as-child>
-                        <Link :href="route('register')">Register</Link>
-                    </Button>
-                </div>
+                <div class="ml-auto flex items-center gap-2">
+                    <ThemeToggle />
+                    <template v-if="!auth.user">
+                        <Button variant="ghost" size="sm" as-child>
+                            <Link :href="route('login')">Log in</Link>
+                        </Button>
+                        <Button size="sm" as-child>
+                            <Link :href="route('register')">Register</Link>
+                        </Button>
+                    </template>
 
-                <div v-else class="ml-auto flex items-center space-x-2">
-                    <DropdownMenu>
+                    <DropdownMenu v-else>
                         <DropdownMenuTrigger :as-child="true">
                             <Button
                                 variant="ghost"
@@ -123,7 +125,7 @@ const mainNavItems = computed<NavItem[]>(() => [
                                 class="relative size-10 w-auto rounded-full p-1 focus-within:ring-2 focus-within:ring-primary"
                             >
                                 <Avatar class="size-8 overflow-hidden rounded-full">
-                                    <AvatarImage :src="auth.user.avatar" :alt="auth.user.name" />
+                                    <AvatarImage v-if="auth.user.avatar" :src="auth.user.avatar" :alt="auth.user.name" />
                                     <AvatarFallback class="rounded-lg bg-neutral-200 font-semibold text-black dark:bg-neutral-700 dark:text-white">
                                         {{ getInitials(auth.user?.name) }}
                                     </AvatarFallback>

@@ -4,24 +4,24 @@ export type CreatureKind = 'monster' | 'npc' | 'player';
 
 export type CreatureSource = 'srd' | 'homebrew';
 
-export interface CreatureStat {
+export type CreatureStat = {
     label: string;
     value: number;
-}
+};
 
-export interface CreatureEntry {
+export type CreatureEntry = {
     name: string;
     description: string;
-}
+};
 
 // When a limited action's uses come back. Mirrors Creature::LIMIT_PERIODS.
 export type LimitPeriod = 'turn' | 'round' | 'encounter' | 'day';
 
-export interface CreatureAction extends CreatureEntry {
+export type CreatureAction = CreatureEntry & {
     // Null when the action can be used any number of times.
     uses: number | null;
     per: LimitPeriod | null;
-}
+};
 
 // Mirrors App\Models\Creature::toFrontend().
 export interface Creature {
@@ -46,7 +46,7 @@ export interface Creature {
 
 export type CombatantSide = 'player' | 'ally' | 'neutral' | 'enemy';
 
-export interface Combatant {
+export type Combatant = {
     // Unique within the encounter; the same creature can appear several times.
     id: string;
     // The compendium creature it came from; null when quick-added straight into the encounter
@@ -54,7 +54,8 @@ export interface Combatant {
     creatureId: number | null;
     name: string;
     side: CombatantSide;
-    initiative: number;
+    // Null until it's rolled or entered (players roll their own), so a real roll of 0 still shows as 0.
+    initiative: number | null;
     hp: number;
     maxHp: number;
     ac: number;
@@ -73,7 +74,7 @@ export interface Combatant {
     hidden?: boolean;
     // Player characters at 0 HP. Three successes: stable. Three failures: dead.
     deathSaves?: { successes: number; failures: number };
-}
+};
 
 export type EnemyHpDisplay = 'bands' | 'exact' | 'hidden';
 
@@ -94,7 +95,7 @@ export interface PlayerViewCombatant {
     id: string;
     name: string;
     side: CombatantSide;
-    initiative: number;
+    initiative: number | null;
     active: boolean;
     hp: number | null;
     maxHp: number | null;

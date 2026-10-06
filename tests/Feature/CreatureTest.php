@@ -41,6 +41,24 @@ class CreatureTest extends TestCase
         $this->assertSame(['label' => 'STR', 'value' => 8], Creature::find($goblinId)->stats[0]);
     }
 
+    public function test_the_initiative_bonus_is_optional_and_kept_when_set()
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->post('/compendium', $this->payload(['name' => 'Quickling', 'initiativeBonus' => '7']))->assertSessionHasNoErrors();
+        $this->actingAs($user)->post('/compendium', $this->payload(['name' => 'Slug']))->assertSessionHasNoErrors();
+        // 0 is a real bonus, not the same as leaving it blank.
+        $this->actingAs($user)->post('/compendium', $this->payload(['name' => 'Steady', 'initiativeBonus' => 0]))->assertSessionHasNoErrors();
+
+        $bonuses = $user->creatures()->pluck('initiative_bonus', 'name');
+        $this->assertSame(7, $bonuses['Quickling']);
+        $this->assertNull($bonuses['Slug']);
+        $this->assertSame(0, $bonuses['Steady']);
+        $this->assertSame(7, $user->creatures()->where('name', 'Quickling')->sole()->toFrontend()['initiativeBonus']);
+
+        $this->actingAs($user)->post('/compendium', $this->payload(['name' => 'Too fast', 'initiativeBonus' => 500]))->assertSessionHasErrors('initiativeBonus');
+    }
+
     public function test_a_user_can_create_a_creature_with_their_own_stats()
     {
         $user = User::factory()->create();

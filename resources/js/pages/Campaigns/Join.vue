@@ -5,15 +5,21 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import type { SharedData } from '@/types';
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { Castle } from 'lucide-vue-next';
+import { computed } from 'vue';
 
 const props = defineProps<{
     token: string;
     campaign: { name: string; description: string | null; dm: string };
 }>();
 
-const isGuest = !usePage<SharedData>().props.auth.user;
+const user = usePage<SharedData>().props.auth.user;
+const isGuest = !user;
+// Joining waits for a verified email; the link in it brings them back to this invite.
+const unverified = !!user && !user.email_verified_at;
 const form = useForm({});
 const join = () => form.post(route('campaigns.join.store', props.token));
+// The server's limit check isn't a form field, so its error needs looking up by name.
+const limitError = computed(() => (form.errors as Record<string, string | undefined>).limit);
 </script>
 
 <template>
@@ -41,9 +47,13 @@ const join = () => form.post(route('campaigns.join.store', props.token));
                             </Button>
                         </div>
                     </template>
+                    <p v-else-if="unverified" class="text-sm">
+                        Verify your email to join: click the link we sent to <span class="font-medium">{{ user?.email }}</span
+                        >, and it'll bring you straight back to this invite.
+                    </p>
                     <template v-else>
                         <Button class="w-full" :disabled="form.processing" @click="join">Join campaign</Button>
-                        <InputError :message="form.errors.limit" />
+                        <InputError :message="limitError" />
                     </template>
                 </div>
             </div>

@@ -46,7 +46,8 @@ class EncounterPayload
             'combatants.*.name' => ['required', 'string', 'max:100'],
             // Optional so fights saved before sides existed still load; toAttributes() fills it in.
             'combatants.*.side' => ['nullable', Rule::in(self::SIDES)],
-            'combatants.*.initiative' => ['required', 'integer', 'between:-100,1000'],
+            // Null until it's rolled or entered (players roll their own).
+            'combatants.*.initiative' => ['present', 'nullable', 'integer', 'between:-100,1000'],
             'combatants.*.hp' => ['required', 'integer', 'min:0', 'max:100000'],
             'combatants.*.maxHp' => ['required', 'integer', 'min:1', 'max:100000'],
             'combatants.*.ac' => ['required', 'integer', 'min:0', 'max:1000'],

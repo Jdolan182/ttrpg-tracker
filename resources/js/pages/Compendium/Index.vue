@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { confirmAction } from '@/composables/useConfirm';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { logEntry } from '@/lib/combatLog';
-import { combatantsFor, initiativeBonus, insertByInitiative } from '@/lib/encounter';
+import { combatantsFor, initiativeBonus, insertByInitiative, MAX_COMBATANTS } from '@/lib/encounter';
 import { readTracker, trackerStorageKey, writeTracker } from '@/lib/trackerStorage';
 import type { SharedData } from '@/types';
 import type { Creature, CreatureKind, CreatureSource } from '@/types/tracker';
@@ -76,6 +76,11 @@ const addToEncounter = (creature: Creature) => {
         log: [],
     };
 
+    if (tracker.combatants.length >= MAX_COMBATANTS) {
+        notice.value = `"${tracker.name}" has the most combatants a fight can (${MAX_COMBATANTS}). Remove someone in the tracker to add more.`;
+        return;
+    }
+
     // Rolled initiative, slotted into the existing order without re-sorting anyone else.
     const activeId = tracker.combatants[tracker.activeIndex]?.id;
     const added = combatantsFor(creature, 1, null, tracker.combatants);
@@ -91,7 +96,7 @@ const addToEncounter = (creature: Creature) => {
     );
     // Arriving mid-fight goes in the history, as it would when added from the tracker.
     if (tracker.round > 0) {
-        tracker.log.push(logEntry(tracker.round, { type: 'joined', targets: [added[0].name], amount: added[0].initiative }));
+        tracker.log.push(logEntry(tracker.round, { type: 'joined', targets: [added[0].name], amount: added[0].initiative ?? undefined }));
     }
 
     writeTracker(key, tracker);

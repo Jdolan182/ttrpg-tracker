@@ -4,7 +4,15 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { defaultSide, defaultStatLabels, sides, switchableSides, type QuickCombatantDetails } from '@/lib/encounter';
+import {
+    defaultSide,
+    defaultStatLabels,
+    initiativeFormula,
+    MAX_COMBATANTS,
+    sides,
+    switchableSides,
+    type QuickCombatantDetails,
+} from '@/lib/encounter';
 import { statRows, statsFromRows } from '@/lib/stats';
 import type { CombatantSide, Creature } from '@/types/tracker';
 import { ChevronDown, Search } from 'lucide-vue-next';
@@ -12,12 +20,17 @@ import { computed, nextTick, ref, watch } from 'vue';
 
 const props = defineProps<{
     creatures: Creature[];
+    // How many more fit in the fight (see MAX_COMBATANTS).
+    room: number;
 }>();
+
+// At most 20 at a time, and never more than fit.
+const maxCount = computed(() => Math.min(20, props.room));
 
 const open = defineModel<boolean>('open', { required: true });
 
 const emit = defineEmits<{
-    // A null initiative means roll it (monsters and NPCs) or 0 for players to fill in.
+    // A null initiative means roll it (monsters and NPCs), or leave it for players to enter.
     add: [creature: Creature, count: number, initiative: number | null, side: CombatantSide];
     // Straight into the encounter, with no compendium entry.
     quickAdd: [details: QuickCombatantDetails];
@@ -92,8 +105,9 @@ const submitCompendium = () => {
         error.value = 'Choose a creature to add.';
         return;
     }
-    if (!Number.isInteger(howMany) || howMany < 1 || howMany > 20) {
-        error.value = 'Add between 1 and 20 at a time.';
+    if (!Number.isInteger(howMany) || howMany < 1 || howMany > maxCount.value) {
+        error.value =
+            howMany > props.room ? `There's only room for ${props.room} more in this fight.` : `Add between 1 and ${maxCount.value} at a time.`;
         return;
     }
     if (init !== null && (!Number.isInteger(init) || init < -100 || init > 1000)) {
@@ -109,9 +123,14 @@ const submitQuick = async ({ another = false } = {}) => {
     const name = quickName.value.trim();
     const hp = wholeNumber(quickHp.value, 1, 100000);
     const ac = quickAc.value === '' ? 10 : wholeNumber(quickAc.value, 0, 1000);
-    // Blank is 0: "not entered yet".
-    const init = quickInitiative.value === '' ? 0 : wholeNumber(quickInitiative.value, -100, 1000);
+    // Blank means they'll enter it later; anything typed has to be a whole number.
+    const init = quickInitiative.value === '' ? null : wholeNumber(quickInitiative.value, -100, 1000);
+    const badInitiative = quickInitiative.value !== '' && init === null;
 
+    if (props.room < 1) {
+        error.value = `This fight has the most combatants it can (${MAX_COMBATANTS}). Remove someone to add more.`;
+        return;
+    }
     if (!name) {
         error.value = 'Enter a name.';
         return;
@@ -120,7 +139,7 @@ const submitQuick = async ({ another = false } = {}) => {
         error.value = 'Enter their hit points (1 or more).';
         return;
     }
-    if (ac === null || init === null) {
+    if (ac === null || badInitiative) {
         error.value = 'AC and initiative must be whole numbers.';
         return;
     }
@@ -163,6 +182,18 @@ const tabClass = (active: boolean) =>
                     Add someone straight to this encounter, like a player's character, without saving them to your compendium.
                 </DialogDescription>
             </DialogHeader>
+
+            <!-- Close to the limit: say so up front rather than when adding fails -->
+            <p
+                v-if="room <= 10"
+                class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-100"
+            >
+                {{
+                    room === 0
+                        ? `This fight has the most combatants it can (${MAX_COMBATANTS}). Remove someone to add more.`
+                        : `Room for ${room} more in this fight (up to ${MAX_COMBATANTS}).`
+                }}
+            </p>
 
             <div class="flex rounded-md border border-border p-0.5" role="tablist" aria-label="How to add">
                 <button
@@ -235,7 +266,7 @@ const tabClass = (active: boolean) =>
                     <div class="grid grid-cols-3 gap-3">
                         <div class="grid gap-1.5">
                             <Label for="combatant-count">How many</Label>
-                            <Input id="combatant-count" v-model="count" type="number" min="1" max="20" />
+                            <Input id="combatant-count" v-model="count" type="number" min="1" :max="maxCount" />
                         </div>
                         <div class="grid gap-1.5">
                             <Label for="combatant-initiative">Initiative</Label>
@@ -244,7 +275,7 @@ const tabClass = (active: boolean) =>
                                 v-model="initiative"
                                 type="number"
                                 :placeholder="isPlayer ? 'Their roll' : 'Roll'"
-                                :title="isPlayer ? 'Leave blank to enter it later' : 'Leave blank to roll d20 + DEX'"
+                                :title="isPlayer ? 'Leave blank to enter it later' : `Leave blank to roll ${initiativeFormula(selected)}`"
                             />
                         </div>
                         <div class="grid gap-1.5">
@@ -260,6 +291,13 @@ const tabClass = (active: boolean) =>
                             <p v-else id="combatant-side" class="flex h-10 items-center text-sm text-muted-foreground">Player</p>
                         </div>
                     </div>
+                    <p v-if="selected" class="text-xs text-muted-foreground">
+                        {{
+                            isPlayer
+                                ? 'Leave initiative blank for them to enter their own roll.'
+                                : `Leave initiative blank to roll ${initiativeFormula(selected)}${Number(count) > 1 ? ' for each one' : ''}.`
+                        }}
+                    </p>
                 </template>
 
                 <template v-else>

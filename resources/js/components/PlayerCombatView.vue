@@ -2,7 +2,7 @@
 // The fight as players see it: turn order, whose turn it is, and health as far as the campaign
 // allows. Used on the campaign page, the full-screen view (e.g. a TV) and the DM's own Player view.
 import CombatHistory from '@/components/CombatHistory.vue';
-import { conditionIcon, sideInfo } from '@/lib/encounter';
+import { conditionIcon, roundsLeft, sideInfo } from '@/lib/encounter';
 import type { HealthStatus, PlayerViewCombatant, PlayerViewFight } from '@/types/tracker';
 import { Brain, ChevronDown, ScrollText, Swords } from 'lucide-vue-next';
 import { computed } from 'vue';
@@ -38,8 +38,6 @@ const barClass = (c: PlayerViewCombatant) => {
     if (percent > 0) return 'bg-amber-500';
     return 'bg-red-500';
 };
-
-const roundsLeft = (rounds: number) => (rounds === 1 ? '1 round left' : `${rounds} rounds left`);
 </script>
 
 <template>
@@ -77,7 +75,7 @@ const roundsLeft = (rounds: number) => (rounds === 1 ? '1 round left' : `${round
                 :aria-current="combatant.active ? 'step' : undefined"
             >
                 <span class="w-8 shrink-0 text-right font-display tabular-nums text-muted-foreground" :class="large ? 'text-2xl' : 'text-base'">
-                    {{ combatant.initiative || '–' }}
+                    {{ combatant.initiative ?? '–' }}
                 </span>
                 <span
                     class="shrink-0 rounded-full"

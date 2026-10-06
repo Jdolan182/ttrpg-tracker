@@ -1,0 +1,75 @@
+{
+    "_about": "Shared by tests/Feature/PlayerViewParityTest.php and resources/js/lib/playerView.test.ts, so App\\Support\\PlayerView and lib/playerView.ts can't drift apart. Each case is a fight as stored and what players should see of it.",
+    "fight": {
+        "name": "Ambush",
+        "round": 2,
+        "activeIndex": 3,
+        "combatants": [
+            { "id": "aria", "creatureId": null, "name": "Aria", "side": "player", "initiative": 18, "hp": 0, "maxHp": 30, "ac": 15, "conditions": [], "used": {}, "deathSaves": { "successes": 1, "failures": 1 } },
+            { "id": "guard", "creatureId": null, "name": "Guard", "side": "ally", "initiative": 15, "hp": 10, "maxHp": 20, "ac": 16, "conditions": ["Prone"], "durations": { "Prone": 2 }, "tempHp": 5, "used": {} },
+            { "id": "lurker", "creatureId": null, "name": "Lurker", "side": "enemy", "initiative": 14, "hp": 30, "maxHp": 30, "ac": 14, "conditions": [], "used": {}, "hidden": true },
+            { "id": "goblin", "creatureId": null, "name": "Goblin", "side": "enemy", "initiative": 12, "hp": 7, "maxHp": 7, "ac": 15, "conditions": ["Poisoned"], "used": {}, "concentrating": true },
+            { "id": "orc", "creatureId": null, "name": "Orc", "side": "enemy", "initiative": 8, "hp": 0, "maxHp": 15, "ac": 13, "conditions": [], "used": {} }
+        ],
+        "log": [
+            { "id": "e1", "at": "2026-10-06T10:00:00Z", "round": 0, "type": "joined", "targets": ["Goblin"], "amount": 12 },
+            { "id": "e2", "at": "2026-10-06T10:00:01Z", "round": 0, "type": "hidden", "targets": ["Lurker"] },
+            { "id": "e3", "at": "2026-10-06T10:00:02Z", "round": 1, "type": "combat_started" },
+            { "id": "e4", "at": "2026-10-06T10:00:03Z", "round": 1, "type": "turn", "actor": "Lurker" },
+            { "id": "e5", "at": "2026-10-06T10:00:04Z", "round": 1, "type": "damage", "targets": ["Aria"], "amount": 6 },
+            { "id": "e6", "at": "2026-10-06T10:00:05Z", "round": 1, "type": "heal", "targets": ["Goblin"], "amount": 3 },
+            { "id": "e7", "at": "2026-10-06T10:00:06Z", "round": 1, "type": "damage", "targets": ["Lurker", "Orc"], "amount": 8 },
+            { "id": "e8", "at": "2026-10-06T10:00:07Z", "round": 1, "type": "heal", "targets": ["Guard"], "amount": 2 },
+            { "id": "e9", "at": "2026-10-06T10:00:08Z", "round": 2, "type": "round" },
+            { "id": "e10", "at": "2026-10-06T10:00:09Z", "round": 2, "type": "turn", "actor": "Goblin" }
+        ]
+    },
+    "cases": [
+        {
+            "enemyHp": "bands",
+            "expected": {
+                "name": "Ambush",
+                "round": 2,
+                "combatants": [
+                    { "id": "aria", "name": "Aria", "side": "player", "initiative": 18, "active": false, "hp": 0, "maxHp": 30, "tempHp": 0, "status": "dying", "conditions": [], "concentrating": false },
+                    { "id": "guard", "name": "Guard", "side": "ally", "initiative": 15, "active": false, "hp": 10, "maxHp": 20, "tempHp": 5, "status": "bloodied", "conditions": [{ "name": "Prone", "rounds": 2 }], "concentrating": false },
+                    { "id": "goblin", "name": "Goblin", "side": "enemy", "initiative": 12, "active": true, "hp": null, "maxHp": null, "tempHp": null, "status": "healthy", "conditions": [{ "name": "Poisoned", "rounds": null }], "concentrating": true },
+                    { "id": "orc", "name": "Orc", "side": "enemy", "initiative": 8, "active": false, "hp": null, "maxHp": null, "tempHp": null, "status": "down", "conditions": [], "concentrating": false }
+                ],
+                "log": [
+                    { "id": "e3", "at": "2026-10-06T10:00:02Z", "round": 1, "type": "combat_started" },
+                    { "id": "e4", "at": "2026-10-06T10:00:03Z", "round": 1, "type": "turn" },
+                    { "id": "e5", "at": "2026-10-06T10:00:04Z", "round": 1, "type": "damage", "targets": ["Aria"], "amount": 6 },
+                    { "id": "e6", "at": "2026-10-06T10:00:05Z", "round": 1, "type": "heal", "targets": ["Goblin"] },
+                    { "id": "e7", "at": "2026-10-06T10:00:06Z", "round": 1, "type": "damage", "targets": ["Orc"], "amount": 8 },
+                    { "id": "e8", "at": "2026-10-06T10:00:07Z", "round": 1, "type": "heal", "targets": ["Guard"], "amount": 2 },
+                    { "id": "e9", "at": "2026-10-06T10:00:08Z", "round": 2, "type": "round" },
+                    { "id": "e10", "at": "2026-10-06T10:00:09Z", "round": 2, "type": "turn", "actor": "Goblin" }
+                ]
+            }
+        },
+        {
+            "enemyHp": "exact",
+            "expected": {
+                "name": "Ambush",
+                "round": 2,
+                "combatants": [
+                    { "id": "aria", "name": "Aria", "side": "player", "initiative": 18, "active": false, "hp": 0, "maxHp": 30, "tempHp": 0, "status": "dying", "conditions": [], "concentrating": false },
+                    { "id": "guard", "name": "Guard", "side": "ally", "initiative": 15, "active": false, "hp": 10, "maxHp": 20, "tempHp": 5, "status": "bloodied", "conditions": [{ "name": "Prone", "rounds": 2 }], "concentrating": false },
+                    { "id": "goblin", "name": "Goblin", "side": "enemy", "initiative": 12, "active": true, "hp": 7, "maxHp": 7, "tempHp": 0, "status": "healthy", "conditions": [{ "name": "Poisoned", "rounds": null }], "concentrating": true },
+                    { "id": "orc", "name": "Orc", "side": "enemy", "initiative": 8, "active": false, "hp": 0, "maxHp": 15, "tempHp": 0, "status": "down", "conditions": [], "concentrating": false }
+                ],
+                "log": [
+                    { "id": "e3", "at": "2026-10-06T10:00:02Z", "round": 1, "type": "combat_started" },
+                    { "id": "e4", "at": "2026-10-06T10:00:03Z", "round": 1, "type": "turn" },
+                    { "id": "e5", "at": "2026-10-06T10:00:04Z", "round": 1, "type": "damage", "targets": ["Aria"], "amount": 6 },
+                    { "id": "e6", "at": "2026-10-06T10:00:05Z", "round": 1, "type": "heal", "targets": ["Goblin"], "amount": 3 },
+                    { "id": "e7", "at": "2026-10-06T10:00:06Z", "round": 1, "type": "damage", "targets": ["Orc"], "amount": 8 },
+                    { "id": "e8", "at": "2026-10-06T10:00:07Z", "round": 1, "type": "heal", "targets": ["Guard"], "amount": 2 },
+                    { "id": "e9", "at": "2026-10-06T10:00:08Z", "round": 2, "type": "round" },
+                    { "id": "e10", "at": "2026-10-06T10:00:09Z", "round": 2, "type": "turn", "actor": "Goblin" }
+                ]
+            }
+        }
+    ]
+}

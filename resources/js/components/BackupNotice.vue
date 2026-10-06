@@ -7,7 +7,7 @@ import { computed } from 'vue';
 
 const page = usePage<SharedData>();
 const error = computed(() => page.props.errors.backup ?? page.props.errors.limit ?? page.props.errors.file);
-const status = computed(() => page.props.flash.status);
+const status = computed(() => page.props.flash.imported);
 </script>
 
 <template>

@@ -44,7 +44,7 @@ class BackupController extends Controller
 
         $result = Backup::import($request->user(), $data);
 
-        return back()->with('status', self::summary($result));
+        return back()->with('imported', self::summary($result));
     }
 
     /**

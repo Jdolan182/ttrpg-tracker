@@ -17,7 +17,8 @@ use Inertia\Response;
 class CampaignPlayerController extends Controller
 {
     /**
-     * The invite page. Guests are asked to log in or sign up first, then come straight back here.
+     * The invite page. Guests are asked to log in or sign up first, and new accounts to verify their
+     * email; either way they come straight back here afterwards.
      */
     public function show(Request $request, string $token): Response|RedirectResponse
     {
@@ -27,7 +28,7 @@ class CampaignPlayerController extends Controller
         if ($campaign->isRunBy($user) || $campaign->hasPlayer($user)) {
             return to_route('campaigns.show', $campaign);
         }
-        if (! $user) {
+        if (! $user || ! $user->hasVerifiedEmail()) {
             $request->session()->put('url.intended', $request->url());
         }
 

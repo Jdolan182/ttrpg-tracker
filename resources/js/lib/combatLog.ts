@@ -31,7 +31,7 @@ export type LogEntryType =
     | 'revealed'
     | 'combat_ended';
 
-export interface LogEntry {
+export type LogEntry = {
     id: string;
     // ISO timestamp.
     at: string;
@@ -47,7 +47,7 @@ export interface LogEntry {
     effect?: 'damage' | 'heal';
     // Type-specific text: the action or condition name, the new side, "back"…
     detail?: string;
-}
+};
 
 export const MAX_LOG_ENTRIES = 1000;
 
@@ -98,7 +98,8 @@ export const describe = (entry: LogEntry): string => {
             return `${entry.actor} used ${entry.detail}${on}${result}`;
         }
         case 'joined':
-            return `${targets} joined the fight (initiative ${entry.amount})`;
+            // No amount: they joined before entering their initiative.
+            return entry.amount === undefined ? `${targets} joined the fight` : `${targets} joined the fight (initiative ${entry.amount})`;
         case 'removed':
             return `${targets} was removed`;
         case 'moved':

@@ -46,7 +46,7 @@ class LimitsTest extends TestCase
         Creature::factory()->count(2)->for($user)->create();
 
         $this->actingAs($user)->post('/compendium', $this->creaturePayload())
-            ->assertSessionHasErrors(['limit' => "You've reached the free limit of 2 creatures. Delete one to make room."]);
+            ->assertSessionHasErrors(['limit' => "You've reached your limit of 2 creatures. Delete one to make room."]);
 
         $this->assertSame(2, $user->creatures()->count());
     }
@@ -78,7 +78,7 @@ class LimitsTest extends TestCase
         Encounter::factory()->for($user)->create();
 
         $this->actingAs($user)->post('/encounters', $this->encounterPayload())
-            ->assertSessionHasErrors(['limit' => "You've reached the free limit of 1 saved encounters. Delete one to make room."]);
+            ->assertSessionHasErrors(['limit' => "You've reached your limit of 1 saved encounters. Delete one to make room."]);
 
         $this->assertSame(1, $user->encounters()->count());
     }
@@ -91,7 +91,7 @@ class LimitsTest extends TestCase
 
         $this->actingAs($user)->post('/compendium', $this->creaturePayload())->assertSessionHasNoErrors();
         $this->actingAs($user)->post('/compendium', $this->creaturePayload('Another'))
-            ->assertSessionHasErrors(['limit' => "You've reached the pro limit of 5 creatures. Delete one to make room."]);
+            ->assertSessionHasErrors(['limit' => "You've reached your limit of 5 creatures. Delete one to make room."]);
     }
 
     public function test_an_unknown_plan_falls_back_to_the_default()

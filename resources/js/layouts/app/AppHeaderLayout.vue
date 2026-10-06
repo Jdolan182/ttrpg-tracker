@@ -3,20 +3,13 @@ import AppContent from '@/components/AppContent.vue';
 import AppHeader from '@/components/AppHeader.vue';
 import AppShell from '@/components/AppShell.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
-import type { BreadcrumbItemType } from '@/types';
-
-interface Props {
-    breadcrumbs?: BreadcrumbItemType[];
-}
-
-withDefaults(defineProps<Props>(), {
-    breadcrumbs: () => [],
-});
+import VerifyEmailBanner from '@/components/VerifyEmailBanner.vue';
 </script>
 
 <template>
-    <AppShell class="flex-col">
+    <AppShell>
         <AppHeader />
+        <VerifyEmailBanner />
         <AppContent>
             <slot />
         </AppContent>

@@ -268,6 +268,23 @@ class EncounterTest extends TestCase
         $this->post('/encounters', $this->payload($goblin, ['round' => -1]))->assertSessionHasErrors('round');
     }
 
+    public function test_a_combatant_can_be_saved_without_an_initiative_yet()
+    {
+        $user = User::factory()->create();
+        $goblin = Creature::factory()->srd()->create();
+        $payload = $this->payload($goblin, ['round' => 0, 'activeIndex' => 0]);
+        $payload['combatants'][0]['initiative'] = null;
+        // A real roll of 0 is kept as 0.
+        $payload['combatants'][1]['initiative'] = 0;
+
+        $this->actingAs($user)->post('/encounters', $payload)->assertSessionHasNoErrors();
+
+        $this->assertSame([null, 0], array_column($user->encounters()->sole()->combatants, 'initiative'));
+
+        unset($payload['combatants'][0]['initiative']);
+        $this->post('/encounters', $payload)->assertSessionHasErrors('combatants.0.initiative');
+    }
+
     public function test_guests_cannot_save_encounters()
     {
         $goblin = Creature::factory()->srd()->create();

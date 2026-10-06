@@ -17,7 +17,7 @@ Decisions agreed for the next stretch of work, in build order. Update this as th
   | Campaigns you've joined as a player | 3 |
 
 - Pro is effectively unlimited for now, with high safety caps, until pricing is decided.
-- At a limit, the action is refused with a friendly message and no prices, e.g. "You've reached the free
+- At a limit, the action is refused with a friendly message and no prices, e.g. "You've reached your
   limit of 25 creatures. Delete one to make room."
 - Plans are switched with an artisan command (for the owner and friends testing): `php artisan plan:set`.
 
@@ -35,7 +35,7 @@ Decisions agreed for the next stretch of work, in build order. Update this as th
 ## 3. Player view (done)
 
 - Players see a campaign's encounter while it's in active combat: from Start combat until combat ends
-  (a new End combat button, which also resets the fight as if it never happened). Setup is never shown.
+  (End combat, which keeps HP and conditions for what comes next, or Reset). Setup is never shown.
 - The tracker's Player view button switches the DM's screen to what players see. Opened in a second
   window (e.g. on a TV), it updates live as the DM runs the fight.
 - Outside campaigns, and for guests, Player view works in a second window on the same computer, with no

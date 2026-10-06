@@ -16,10 +16,10 @@ import { computed } from 'vue';
 
 // An action as edited: `uses` is '' while blank (unlimited), and `per` is kept even then so it's
 // remembered if a limit is typed back in.
-interface ActionForm extends CreatureEntry {
+type ActionForm = CreatureEntry & {
     uses: number | string;
     per: LimitPeriod;
-}
+};
 
 const props = defineProps<{
     // The creature being edited, or null when creating.
@@ -45,6 +45,8 @@ const atLimit = computed(() => {
     return !isEditing && !!limit && limit.used >= limit.limit;
 });
 const base = props.creature ?? props.template;
+// The server's limit check isn't a form field, so its error needs looking up by name.
+const limitError = computed(() => (form.errors as Record<string, string | undefined>).limit);
 
 const defaultStats: CreatureStat[] = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'].map((label) => ({ label, value: 10 }));
 
@@ -134,12 +136,12 @@ const textareaClass =
             </p>
 
             <p
-                v-if="form.errors.limit || atLimit"
+                v-if="limitError || atLimit"
                 class="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-100"
                 role="alert"
             >
                 {{
-                    form.errors.limit ??
+                    limitError ??
                     `You've reached the limit of ${page.props.limits?.creatures.limit} creatures. Delete one from your compendium to make room.`
                 }}
             </p>

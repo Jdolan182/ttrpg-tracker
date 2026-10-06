@@ -108,7 +108,7 @@ class BackupTest extends TestCase
 
         $this->upload($friend, $backup)
             ->assertRedirect('/encounters')
-            ->assertSessionHas('status', 'Imported 1 creature and 1 encounter.');
+            ->assertSessionHas('imported', 'Imported 1 creature and 1 encounter.');
 
         $ogre = $friend->creatures()->sole();
         $this->assertSame('Bog Ogre', $ogre->name);
@@ -123,12 +123,26 @@ class BackupTest extends TestCase
         $this->assertSame('combat_started', $encounter->log[0]['type']);
     }
 
+    public function test_initiative_bonuses_and_unrolled_initiative_survive_a_round_trip()
+    {
+        [$dm, $ogre, , $encounter] = $this->dmWithEncounter();
+        $ogre->update(['initiative_bonus' => 4]);
+        $encounter->update(['combatants' => [...$encounter->combatants, $this->combatant(null, 'Borin', ['side' => 'player', 'initiative' => null])]]);
+        $backup = $this->actingAs($dm)->get('/backup')->json();
+        $friend = User::factory()->create();
+
+        $this->upload($friend, $backup)->assertSessionHasNoErrors();
+
+        $this->assertSame(4, $friend->creatures()->sole()->initiative_bonus);
+        $this->assertNull(collect($friend->encounters()->sole()->combatants)->firstWhere('name', 'Borin')['initiative']);
+    }
+
     public function test_importing_again_reuses_identical_creatures()
     {
         [$user] = $this->dmWithEncounter();
         $backup = $this->actingAs($user)->get('/backup')->json();
 
-        $this->upload($user, $backup)->assertSessionHas('status', 'Imported 1 encounter. 1 creature was already in your compendium, so it was reused.');
+        $this->upload($user, $backup)->assertSessionHas('imported', 'Imported 1 encounter. 1 creature was already in your compendium, so it was reused.');
 
         $this->assertSame(1, $user->creatures()->count());
         $this->assertSame(2, $user->encounters()->count());
@@ -155,7 +169,7 @@ class BackupTest extends TestCase
         $backup = $this->actingAs($user)->get('/backup')->json();
         Creature::whereNull('user_id')->where('name', 'Goblin')->delete();
 
-        $this->upload($user, $backup)->assertSessionHas('status', fn (string $status) => str_contains($status, "1 combatant's creature couldn't be found"));
+        $this->upload($user, $backup)->assertSessionHas('imported', fn (string $status) => str_contains($status, "1 combatant's creature couldn't be found"));
 
         $imported = $user->encounters()->latest('id')->first();
         $this->assertNull($imported->combatants[1]['creatureId']);

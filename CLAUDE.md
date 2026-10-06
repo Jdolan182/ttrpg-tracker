@@ -16,7 +16,9 @@ Run these from WSL in the project folder (`sail` = `./vendor/bin/sail`):
 - `sail up -d` starts the app (http://localhost), Postgres, Mailpit (http://localhost:8025), Reverb and a queue worker.
 - `sail npm run dev` starts Vite with hot reload.
 - `sail test` runs the PHP tests. The "deprecated" count they report comes from PHP 8.5 and isn't a failure.
-- `sail npx eslint resources/js`, `sail npx prettier --write <files>` and `sail npm run build` check and build the frontend. There are no JS unit tests; check UI changes in a browser.
+- `sail npx eslint resources/js`, `sail npx prettier --write <files>`, `sail npm run typecheck` (vue-tsc) and `sail npm run build` check and build the frontend.
+- `sail npm run test:js` runs the Vitest tests for the plain logic in `resources/js/lib` (`*.test.ts` next to the code). There are no UI tests; check UI changes in a browser.
+- `tests/fixtures/player-view.json` holds cases both the PHP and the TS player view must match (PlayerViewParityTest and playerView.test.ts). Add a case there when the filtering rules change.
 - `sail artisan migrate`. Avoid `migrate:fresh` on a database with real accounts in it.
 - `sail artisan db:seed --class=SrdCreatureSeeder` loads the SRD monsters. Safe to re-run, and needed on deploy.
 - Local test login (from `DatabaseSeeder`): test@example.com / `password`.
@@ -33,7 +35,11 @@ If `.env` is ever left with `SHARE_MODE`/`TRUSTED_PROXIES`, restore it from `.en
 ## How it's built
 
 - Routes: [routes/web.php](routes/web.php). The tracker (`/`) and compendium (`/compendium`) are public, so
-  guests can use them; anything that saves is behind `auth`. Ownership is checked with policies in `app/Policies`.
+  guests can use them; anything that saves is behind `auth` and `verified`. Ownership is checked with policies in `app/Policies`.
+- Accounts verify their email (`User implements MustVerifyEmail`). Until then they work like a guest in the tracker
+  and compendium and can use their settings; a banner (`VerifyEmailBanner`) says so. Locally the emails land in
+  Mailpit; a real mail provider is needed before real users sign up. Accounts from before verification existed were
+  marked verified by a migration.
 - Data goes to the frontend through `toFrontend()` on the models, which is mirrored by the types in
   [resources/js/types/tracker.ts](resources/js/types/tracker.ts). Change both together.
 - **Creatures** (`creatures` table): SRD rows have `user_id = null` and are read-only. Homebrew belongs to its owner.
@@ -56,7 +62,7 @@ If `.env` is ever left with `SHARE_MODE`/`TRUSTED_PROXIES`, restore it from `.en
   `url.intended`); resetting the token kills the old link. `enemy_hp` (bands/exact/hidden) is for the player view.
 - **Player view**: players see a campaign's fight only during combat (round ≥ 1). While a campaign encounter is
   in combat, the tracker sends it (debounced) to `campaigns.combat.update`, which stores it in `campaigns.live`.
-  That's separate from saving. End combat clears it. `live` is never sent to the frontend as is:
+  That's separate from saving. End combat and Reset clear it. `live` is never sent to the frontend as is:
   [app/Support/PlayerView.php](app/Support/PlayerView.php) drops hidden combatants and applies `enemy_hp`. It also
   filters the history (latest 150 entries): setup, hide/reveal entries and anything involving someone while they
   were hidden are removed, and enemy healing amounts are hidden unless HP is exact. Its
@@ -71,7 +77,12 @@ If `.env` is ever left with `SHARE_MODE`/`TRUSTED_PROXIES`, restore it from `.en
   creatures you already have. The tracker builds the same file for the open fight in
   [resources/js/lib/backup.ts](resources/js/lib/backup.ts) (so guests can export); keep the two in step and
   bump `VERSION` if the shape changes. The saved encounters list is `/encounters` (`Encounters/List.vue`).
-- The tracker page ([resources/js/pages/Encounters/Index.vue](resources/js/pages/Encounters/Index.vue)):
+- The tracker page ([resources/js/pages/Encounters/Index.vue](resources/js/pages/Encounters/Index.vue)) is mostly layout.
+  Its logic is in [resources/js/composables/tracker](resources/js/composables/tracker): `useUndo` (changes, history,
+  undo), `useCombat` (turns, HP, death saves, concentration, conditions, order), `useEncounterFile` (save/open,
+  browser storage, unsaved changes, links), `useLiveSync` (player view), all put together with the screen's own
+  state by `useTracker`. The page calls `provideTracker(props)`; its parts in `components/tracker`
+  (EncounterBar, TurnBar, InitiativeList, CombatantPanel…) take what they need with `useTrackerContext()`.
   - Its props are the saved encounters as ids and names only, plus one full `openEncounter` (from
     `?encounter=` or the most recent). Opening another one reloads only that prop. It also gets the DM's
     `campaigns` (with party ids, for the campaign picker and "Add party") and `newInCampaign`
@@ -80,12 +91,14 @@ If `.env` is ever left with `SHARE_MODE`/`TRUSTED_PROXIES`, restore it from `.en
     keyed per user or guest. When a guest registers, their fight is copied into the new account
     ([app/Actions/ImportGuestEncounter.php](app/Actions/ImportGuestEncounter.php)).
   - Every change to the fight goes through `change(label, fn)` so it can be undone, and records history with `addLog()`.
-    Undo steps don't copy the history; they remember the newest entry. End combat (which puts everything back as if no fight happened) is the exception and passes
-    `replacesLog`. History types and wording are in [resources/js/lib/combatLog.ts](resources/js/lib/combatLog.ts).
+    Undo steps don't copy the history; they remember the newest entry. The exceptions clear the history and pass
+    `replacesLog`: End combat (back to setup; HP, conditions and per-day uses carry on, per-turn/round/encounter
+    uses come back) and Reset (as if the fight never happened). History types and wording are in [resources/js/lib/combatLog.ts](resources/js/lib/combatLog.ts).
   - During combat the order belongs to the DM: sort only on roll, Start combat or Sort, and keep the turn with
     whoever holds it (`keepingTurn`).
 - Shared helpers:
-  - [resources/js/lib/encounter.ts](resources/js/lib/encounter.ts): conditions (with icons), sides, dice/initiative (d20 + DEX), limits.
+  - [resources/js/lib/encounter.ts](resources/js/lib/encounter.ts): conditions (with icons), sides, dice, initiative
+    (the creature's bonus, else DEX; ties go to the higher bonus), limits, and fight-state checks (`isOut`, `isDead`…).
   - [resources/js/lib/stats.ts](resources/js/lib/stats.ts): d20 modifiers. The user setting `stat_display` controls how stats show.
   - `plainCopy()` in [resources/js/lib/utils.ts](resources/js/lib/utils.ts): use it instead of `structuredClone` on
     Inertia props, which are reactive proxies that `structuredClone` can't copy.

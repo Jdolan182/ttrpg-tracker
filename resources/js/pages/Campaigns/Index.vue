@@ -34,6 +34,8 @@ const deleteCampaign = async (campaign: { id: number; name: string; players: num
 const creating = ref(false);
 const form = useForm({ name: '', description: '' });
 const create = () => form.post(route('campaigns.store'));
+// The server's limit check isn't one of the form's fields, so its error needs looking up by name.
+const limitError = computed(() => (form.errors as Record<string, string | undefined>).limit);
 
 const textareaClass =
     'flex min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
@@ -76,7 +78,7 @@ const textareaClass =
                     />
                     <InputError :message="form.errors.description" />
                 </div>
-                <InputError :message="form.errors.limit" />
+                <InputError :message="limitError" />
                 <div class="flex justify-end gap-2">
                     <Button type="button" variant="outline" @click="creating = false">Cancel</Button>
                     <Button type="submit" :disabled="form.processing">Create campaign</Button>

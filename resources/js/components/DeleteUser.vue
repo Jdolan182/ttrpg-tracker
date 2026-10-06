@@ -1,8 +1,4 @@
 <script setup lang="ts">
-import { useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
-
-// Components
 import HeadingSmall from '@/components/HeadingSmall.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
@@ -18,11 +14,30 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import type { SharedData } from '@/types';
+import { useForm, usePage } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
 
-const passwordInput = ref<HTMLInputElement | null>(null);
+const passwordInput = ref<InstanceType<typeof Input> | null>(null);
 
 const form = useForm({
     password: '',
+});
+
+// What goes with the account, from the usage counts every page gets, so nobody's surprised.
+const limits = computed(() => usePage<SharedData>().props.limits);
+const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+const losses = computed(() => {
+    const l = limits.value;
+    if (!l) return [];
+    return [
+        l.creatures.used ? `${plural(l.creatures.used, 'creature or character', 'creatures and characters')} you made` : null,
+        l.encounters.used ? plural(l.encounters.used, 'saved encounter', 'saved encounters') : null,
+        l.campaigns.used
+            ? `${plural(l.campaigns.used, 'campaign', 'campaigns')} you run, along with ${l.campaigns.used === 1 ? 'its' : 'their'} party. Your players lose access too.`
+            : null,
+        l.campaigns_joined.used ? `your place in ${plural(l.campaigns_joined.used, 'campaign', 'campaigns')} you've joined` : null,
+    ].filter((line): line is string => !!line);
 });
 
 const deleteUser = (e: Event) => {
@@ -31,7 +46,7 @@ const deleteUser = (e: Event) => {
     form.delete(route('profile.destroy'), {
         preserveScroll: true,
         onSuccess: () => closeModal(),
-        onError: () => passwordInput.value?.focus(),
+        onError: () => (passwordInput.value?.$el as HTMLInputElement | undefined)?.focus(),
         onFinish: () => form.reset(),
     });
 };
@@ -44,11 +59,11 @@ const closeModal = () => {
 
 <template>
     <div class="space-y-6">
-        <HeadingSmall title="Delete account" description="Delete your account and all of its resources" />
+        <HeadingSmall title="Delete account" description="Delete your account and everything you've made" />
         <div class="space-y-4 rounded-lg border border-red-100 bg-red-50 p-4 dark:border-red-200/10 dark:bg-red-700/10">
             <div class="relative space-y-0.5 text-red-600 dark:text-red-100">
                 <p class="font-medium">Warning</p>
-                <p class="text-sm">Please proceed with caution, this cannot be undone.</p>
+                <p class="text-sm">This can't be undone. Export a backup first (Encounters → Backup) if you might want your things back.</p>
             </div>
             <Dialog>
                 <DialogTrigger as-child>
@@ -57,27 +72,28 @@ const closeModal = () => {
                 <DialogContent>
                     <form class="space-y-6" @submit="deleteUser">
                         <DialogHeader class="space-y-3">
-                            <DialogTitle>Are you sure you want to delete your account?</DialogTitle>
-                            <DialogDescription>
-                                Once your account is deleted, all of its resources and data will also be permanently deleted. Please enter your
-                                password to confirm you would like to permanently delete your account.
+                            <DialogTitle>Delete your account?</DialogTitle>
+                            <DialogDescription as="div" class="space-y-2">
+                                <p>Everything you've made is deleted with it, for good:</p>
+                                <ul v-if="losses.length" class="list-disc space-y-1 pl-5">
+                                    <li v-for="line in losses" :key="line">{{ line }}</li>
+                                </ul>
+                                <p v-else>You haven't made anything yet, so only the account itself goes.</p>
+                                <p>Enter your password to confirm.</p>
                             </DialogDescription>
                         </DialogHeader>
 
                         <div class="grid gap-2">
                             <Label for="password" class="sr-only">Password</Label>
-                            <Input id="password" type="password" name="password" ref="passwordInput" v-model="form.password" placeholder="Password" />
+                            <Input id="password" ref="passwordInput" v-model="form.password" type="password" name="password" placeholder="Password" />
                             <InputError :message="form.errors.password" />
                         </div>
 
-                        <DialogFooter>
+                        <DialogFooter class="gap-2">
                             <DialogClose as-child>
-                                <Button variant="secondary" @click="closeModal"> Cancel </Button>
+                                <Button type="button" variant="secondary" @click="closeModal">Cancel</Button>
                             </DialogClose>
-
-                            <Button variant="destructive" :disabled="form.processing">
-                                <button type="submit">Delete account</button>
-                            </Button>
+                            <Button type="submit" variant="destructive" :disabled="form.processing">Delete account</Button>
                         </DialogFooter>
                     </form>
                 </DialogContent>

@@ -121,10 +121,10 @@ class Limits
         }
 
         [$what, $makeRoom] = self::WORDING[$key];
-        $plan = strtolower(self::plan($user)['name']);
 
+        // No plan name: subscriptions are hidden, so the message is about usage only.
         throw ValidationException::withMessages([
-            'limit' => "You've reached the {$plan} limit of ".self::limit($user, $key)." {$what}. {$makeRoom}",
+            'limit' => "You've reached your limit of ".self::limit($user, $key)." {$what}. {$makeRoom}",
         ]);
     }
 }

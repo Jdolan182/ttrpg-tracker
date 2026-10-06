@@ -5,15 +5,7 @@ import { useStatDisplay } from '@/composables/useStatDisplay';
 import AppLayout from '@/layouts/AppLayout.vue';
 import SettingsLayout from '@/layouts/settings/Layout.vue';
 import { statDisplays, statParts, type StatDisplay } from '@/lib/stats';
-import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/vue3';
-
-const breadcrumbItems: BreadcrumbItem[] = [
-    {
-        title: 'Display settings',
-        href: '/settings/display',
-    },
-];
 
 const current = useStatDisplay();
 
@@ -28,7 +20,7 @@ const preview = [
     { label: 'INT', value: 7 },
 ];
 
-// Saves as soon as an option is picked, like the appearance setting.
+// Saves as soon as an option is picked; there's no Save button.
 const choose = (value: StatDisplay) => {
     if (form.processing || value === form.stat_display) return;
     form.stat_display = value;
@@ -37,7 +29,7 @@ const choose = (value: StatDisplay) => {
 </script>
 
 <template>
-    <AppLayout :breadcrumbs="breadcrumbItems">
+    <AppLayout>
         <Head title="Display settings" />
 
         <SettingsLayout>

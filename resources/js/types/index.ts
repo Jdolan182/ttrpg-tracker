@@ -1,13 +1,9 @@
 import type { StatDisplay } from '@/lib/stats';
+import type { PageProps } from '@inertiajs/core';
 import type { LucideIcon } from 'lucide-vue-next';
 
 export interface Auth {
     user: User | null;
-}
-
-export interface BreadcrumbItem {
-    title: string;
-    href: string;
 }
 
 export interface NavItem {
@@ -17,23 +13,15 @@ export interface NavItem {
     isActive?: boolean;
 }
 
-export interface SharedData {
-    name: string;
-    quote: { message: string; author: string };
+// The props every page gets (HandleInertiaRequests::share). Extends Inertia's own so usePage<SharedData>() type-checks.
+export interface SharedData extends PageProps {
     auth: Auth;
     // Usage against the account's limits (config/plans.php). Null for guests.
     limits: Record<'creatures' | 'encounters' | 'campaigns' | 'campaigns_joined', { used: number; limit: number }> | null;
     flash: {
         savedEncounterId: number | null;
-        // A one-off message after something finishes, e.g. what an import added.
-        status: string | null;
-    };
-    ziggy: {
-        location: string;
-        url: string;
-        port: null | number;
-        defaults: Record<string, unknown>;
-        routes: Record<string, string>;
+        // What an import added.
+        imported: string | null;
     };
 }
 
@@ -47,5 +35,3 @@ export interface User {
     created_at: string;
     updated_at: string;
 }
-
-export type BreadcrumbItemType = BreadcrumbItem;

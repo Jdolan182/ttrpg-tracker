@@ -55,6 +55,8 @@ export const normalizeCombatants = (combatants: Combatant[], creaturesById: Map<
         if (!combatant.used || Array.isArray(combatant.used)) combatant.used = {};
         if (Array.isArray(combatant.durations)) delete combatant.durations;
         if (combatant.creatureId === undefined) combatant.creatureId = null;
+        // Older saves used 0 for a player who hadn't entered their initiative yet.
+        if (combatant.initiative === 0 && combatant.side === 'player') combatant.initiative = null;
 
         const creature = combatant.creatureId === null ? undefined : creaturesById.get(combatant.creatureId);
         // A deleted creature's kind is unknown, so trust whatever side was saved.
@@ -94,18 +96,24 @@ export const restoreUses = (combatant: Combatant, creature: Creature | undefined
     }
 };
 
+// The most combatants one fight can have. Mirrors EncounterPayload::MAX_COMBATANTS: the server won't
+// save (or show players) a bigger fight, so the tracker stops adding at this point instead.
+export const MAX_COMBATANTS = 100;
+
 // A combatant's initiative bonus, which needs the creatures to look up (see initiativeBonus()).
 export type BonusOf = (combatant: Combatant) => number;
 
 /**
  * Turn order: highest initiative first; a tie goes to the higher initiative bonus (the usual table
- * rule, since 5e leaves ties to the DM). Anyone still tied keeps their place, as sort is stable, so
- * the DM can settle it by dragging.
+ * rule, since 5e leaves ties to the DM). Anyone without an initiative yet goes last. Anyone still
+ * tied keeps their place, as sort is stable, so the DM can settle it by dragging.
  */
 export const byInitiative =
     (bonusOf: BonusOf) =>
-    (a: Combatant, b: Combatant): number =>
-        b.initiative - a.initiative || bonusOf(b) - bonusOf(a);
+    (a: Combatant, b: Combatant): number => {
+        if (a.initiative === null || b.initiative === null) return (a.initiative === null ? 1 : 0) - (b.initiative === null ? 1 : 0);
+        return b.initiative - a.initiative || bonusOf(b) - bonusOf(a);
+    };
 
 // How long a condition lasts, in rounds. Counted down at the end of the affected combatant's turn,
 // so "until the end of its next turn" is 1. Null means until it's removed by hand.
@@ -128,6 +136,23 @@ export const isDead = (combatant: Combatant) => combatant.side === 'player' && (
 /** A player character at 0 HP who has made three successful death saves. */
 export const isStable = (combatant: Combatant) =>
     combatant.side === 'player' && combatant.hp === 0 && (combatant.deathSaves?.successes ?? 0) >= 3 && !isDead(combatant);
+
+/**
+ * Out of the fight and skipped in the turn order: defeated non-players, and players who have died.
+ * Players who are down but not dead still get their turn (death saves, being revived).
+ */
+export const isOut = (combatant: Combatant) => (combatant.hp <= 0 && combatant.side !== 'player') || isDead(combatant);
+
+export const roundsLeft = (rounds: number) => (rounds === 1 ? '1 round left' : `${rounds} rounds left`);
+
+export const hpPercent = (combatant: Pick<Combatant, 'hp' | 'maxHp'>) => Math.round((combatant.hp / combatant.maxHp) * 100);
+
+export const hpBarColor = (combatant: Pick<Combatant, 'hp' | 'maxHp'>) => {
+    const percent = hpPercent(combatant);
+    if (percent > 50) return 'bg-emerald-500';
+    if (percent > 25) return 'bg-amber-500';
+    return 'bg-red-500';
+};
 
 /**
  * Adds combatants without disturbing a hand-arranged order: each one goes in front of the first
@@ -174,8 +199,7 @@ export const initiativeFormula = (who: RollsInitiative | undefined) => {
     return `d20 ${sign} ${Math.abs(bonus)} (${from === 'bonus' ? 'initiative bonus' : 'DEX'})`;
 };
 
-// Can come out at 0 or below with a penalty, which is allowed. Players added without a roll get 0,
-// shown as a dash until it's filled in.
+// Can come out at 0 or below with a penalty, which is allowed.
 export const rollInitiative = (who: RollsInitiative | undefined) => rollDie(20) + initiativeBonus(who).bonus;
 
 // The six d20 ability scores, offered as a starting point when typing stats in by hand.
@@ -187,7 +211,8 @@ export interface QuickCombatantDetails {
     name: string;
     hp: number;
     ac: number;
-    initiative: number;
+    // Null when it's left for them to enter.
+    initiative: number | null;
     side: CombatantSide;
     stats: CreatureStat[];
 }
@@ -214,8 +239,8 @@ export const quickCombatant = (details: QuickCombatantDetails): Combatant => ({
 /**
  * Combatants for `count` copies of a creature. They get numbered ("Goblin 1", "Goblin 2")
  * when there's more than one in the fight, continuing from any already there.
- * A null initiative means "roll it": each monster or NPC rolls separately, and players get 0
- * because players roll their own.
+ * A null initiative means "roll it": each monster or NPC rolls separately, and players are left
+ * without one because players roll their own.
  */
 export const combatantsFor = (
     creature: Creature,
@@ -233,7 +258,7 @@ export const combatantsFor = (
         creatureId: creature.id,
         name: numbered ? `${creature.name} ${sameCreature + i + 1}` : creature.name,
         side: isPlayer ? 'player' : side === 'player' ? 'enemy' : side,
-        initiative: initiative ?? (isPlayer ? 0 : rollInitiative(creature)),
+        initiative: initiative ?? (isPlayer ? null : rollInitiative(creature)),
         hp: creature.hp,
         maxHp: creature.hp,
         ac: creature.ac,
