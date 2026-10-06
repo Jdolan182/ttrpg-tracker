@@ -1,6 +1,6 @@
 // What players see of a fight. Mirrors App\Support\PlayerView, which does the same on the server for
 // players' own devices; this one is for the DM's screen and the same-computer second window.
-import type { LogEntry } from '@/lib/combatLog';
+import { dmOnlyLogTypes, type LogEntry } from '@/lib/combatLog';
 import type { Combatant, EnemyHpDisplay, HealthStatus, PlayerViewCombatant, PlayerViewFight } from '@/types/tracker';
 
 const friendlySides = ['player', 'ally'];
@@ -39,7 +39,7 @@ export const HISTORY_LIMIT = 150;
 
 /**
  * The history without anything players shouldn't know: entries about combatants while they were
- * hidden, setup, the DM's hide/reveal bookkeeping, and (unless enemy HP is exact) how much enemies
+ * hidden, setup, the DM's bookkeeping (hide/reveal, recharge rolls), and (unless enemy HP is exact) how much enemies
  * healed. Damage stays: players hear that at the table.
  *
  * Who was hidden when is worked out by walking back from now: a "hidden" entry means they weren't
@@ -61,7 +61,7 @@ const historyFor = (log: LogEntry[], combatants: Combatant[], enemyHp: EnemyHpDi
             }
             continue;
         }
-        if (entry.round < 1) continue;
+        if (entry.round < 1 || dmOnlyLogTypes.includes(entry.type)) continue;
 
         // A hidden combatant's turn still happened; players just don't learn whose it was.
         if (entry.type === 'turn' && hidden.has(entry.actor ?? '')) {

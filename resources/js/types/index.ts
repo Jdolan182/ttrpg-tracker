@@ -15,6 +15,9 @@ export interface NavItem {
 
 // The props every page gets (HandleInertiaRequests::share). Extends Inertia's own so usePage<SharedData>() type-checks.
 export interface SharedData extends PageProps {
+    appName: string;
+    // Where the footer's Feedback link goes; null hides it.
+    feedbackUrl: string | null;
     auth: Auth;
     // Usage against the account's limits (config/plans.php). Null for guests.
     limits: Record<'creatures' | 'encounters' | 'campaigns' | 'campaigns_joined', { used: number; limit: number }> | null;

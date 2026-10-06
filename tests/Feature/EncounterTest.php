@@ -184,6 +184,7 @@ class EncounterTest extends TestCase
 
         $payload = $this->payload($goblin);
         $payload['combatants'][0]['used'] = ['Scimitar' => 2, 'Unused' => 0];
+        $payload['combatants'][0]['spent'] = ['Legendary actions' => 2, 'Mana' => 0];
         $payload['log'] = [
             ['id' => 'l1', 'at' => '2026-09-28T16:00:00Z', 'round' => 1, 'type' => 'turn', 'actor' => 'Goblin 1'],
             [
@@ -197,6 +198,9 @@ class EncounterTest extends TestCase
         $encounter = $user->encounters()->sole();
         $this->assertSame(['Scimitar' => 2], $encounter->combatants[0]['used']);
         $this->assertSame([], $encounter->combatants[1]['used']);
+        // Spent resources too, leaving out what's untouched; nothing spent leaves no key at all.
+        $this->assertSame(['Legendary actions' => 2], $encounter->combatants[0]['spent']);
+        $this->assertArrayNotHasKey('spent', $encounter->combatants[1]);
         $this->assertCount(2, $encounter->log);
         // Unknown keys are dropped (jsonb keeps its own key order, hence canonicalizing).
         $this->assertEqualsCanonicalizing(['id', 'at', 'round', 'type', 'actor', 'targets', 'amount', 'effect', 'detail'], array_keys($encounter->log[1]));

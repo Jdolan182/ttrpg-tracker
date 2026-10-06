@@ -1,7 +1,10 @@
-# TTRPG Tracker
+# Turnkeeper
 
 A system-agnostic encounter builder and combat tracker for tabletop RPGs (D&D 5e is only the default
-content). "TTRPG Tracker" is a placeholder name. Planned later: a paid tier (see docs/roadmap.md).
+content), going live at https://theturnkeeper.app. Its name comes from `APP_NAME`. The repo, folder,
+browser-storage keys (`ttrpg-tracker:…`) and backup format marker keep the old "ttrpg-tracker" name on
+purpose: renaming those would lose fights in progress and break existing backup files.
+Planned later: a paid tier (see docs/roadmap.md).
 
 ## Stack
 
@@ -39,17 +42,33 @@ If `.env` is ever left with `SHARE_MODE`/`TRUSTED_PROXIES`, restore it from `.en
 - Accounts verify their email (`User implements MustVerifyEmail`). Until then they work like a guest in the tracker
   and compendium and can use their settings; a banner (`VerifyEmailBanner`) says so. Locally the emails land in
   Mailpit; a real mail provider is needed before real users sign up. Accounts from before verification existed were
-  marked verified by a migration.
+  marked verified by a migration. The account emails' wording is in `AppServiceProvider::wordEmails()` and their look
+  in [resources/views/vendor/mail](resources/views/vendor/mail) (only the changed templates are kept there).
+- Running it for real: [docs/deploying.md](docs/deploying.md) and [deploy/env.production.example](deploy/env.production.example).
+  With an `https://` `APP_URL`, every generated link uses it (`AppServiceProvider::pinLinksToAppUrl()`). Errors go to
+  Sentry when `SENTRY_LARAVEL_DSN` is set. "Send feedback" (footer and account menu) goes to `FEEDBACK_URL`, else emails `CONTACT_EMAIL`; `/privacy` is the
+  plain-language privacy note, so keep it true when what's stored changes.
+- Rate limits (`AppServiceProvider::limitRequests()`): sign-ups 5/hour and reset emails 5/minute per IP, and every
+  change by a signed-in account 60/minute ("writes", on the whole web group; reads, guests and the live player
+  view's own 300/minute are left out). `bootstrap/app.php` turns hitting one into a form error (`email`, or
+  `throttle`, shown by `ThrottleNotice`). The seeded test account is only created locally.
 - Data goes to the frontend through `toFrontend()` on the models, which is mirrored by the types in
   [resources/js/types/tracker.ts](resources/js/types/tracker.ts). Change both together.
 - **Creatures** (`creatures` table): SRD rows have `user_id = null` and are read-only. Homebrew belongs to its owner.
   `Creature::visibleTo($user)` returns SRD plus the user's own. SRD data comes from
   [database/data/srd-creatures.json](database/data/srd-creatures.json) (SRD 5.1, CC-BY-4.0; keep the
-  attribution). `kind` is monster/npc/player.
+  attribution), generated from the full SRD monster list in `database/data/source/` by
+  `sail php database/data/convert-srd-monsters.php` (edit the mapping there, not the output, then re-run it and
+  the seeder). The seeder validates every creature with the form's rules. `kind` is monster/npc/player.
 - **Stats are generic**: an ordered list of `{label, value}`, never an object. Postgres `jsonb` reorders
   object keys, so order would be lost, and tests on jsonb data must not depend on key order.
-- **Actions** have optional limits: `uses` + `per` (turn/round/encounter/day). Action names are unique per creature,
-  because combatants count uses by name (`combatant.used[name]`).
+- **Actions** have at most one kind of limit (`limitKind()` in `lib/encounter.ts`; the server enforces one with `prohibits`):
+  `uses` + `per` (turn/round/encounter/day), `recharge` `{die, min}` (rolled at the start of its turn once spent),
+  `cooldown` (rounds or dice, rolled on use), or `resource` + `cost` from one of the creature's `resources`
+  (named pools `{name, max, per}`: legendary actions, spell slots, mana…). Keep the wording generic, never D&D-only.
+  Action names are unique per creature, because combatants track them by name: `combatant.used[name]` is times used,
+  1 while a recharge is spent, or cooldown rounds left; `combatant.spent[resource]` is what's spent of a pool.
+  Recharge rolls go in the history as `recharged`/`not_recharged`, which players never see (DM-only log types).
 - **Encounters** (`encounters` table) store the whole fight: `combatants` (a jsonb snapshot per
   combatant: side, initiative, HP, AC, conditions, uses), `round` (0 means setup, before "Start combat"),
   `active_index`, and `log` (the combat history, jsonb, capped at 1,000 entries).

@@ -14,7 +14,6 @@ import UseActionDialog from '@/components/UseActionDialog.vue';
 import type { TrackerProps } from '@/composables/tracker/useEncounterFile';
 import { provideTracker } from '@/composables/tracker/useTracker';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { usesLeft } from '@/lib/encounter';
 import { Head, Link } from '@inertiajs/vue3';
 import { Brain, ExternalLink, MonitorPlay, Plus } from 'lucide-vue-next';
 
@@ -41,6 +40,7 @@ const {
     actionOpen,
     actionActor,
     chosenAction,
+    chosenStatus,
     useAction,
 } = provideTracker(props);
 </script>
@@ -128,7 +128,7 @@ const {
                 </div>
             </template>
 
-            <p class="text-xs text-muted-foreground">
+            <p class="hidden text-xs text-muted-foreground sm:block">
                 Shortcuts: <kbd class="rounded border px-1">N</kbd> next turn, <kbd class="rounded border px-1">P</kbd> previous turn,
                 <kbd class="rounded border px-1">Enter</kbd> damage, <kbd class="rounded border px-1">Shift + Enter</kbd> heal,
                 <kbd class="rounded border px-1">Ctrl + Z</kbd> undo.
@@ -141,7 +141,7 @@ const {
             v-model:open="actionOpen"
             :actor="actionActor"
             :action="chosenAction"
-            :uses-left="actionActor && chosenAction ? usesLeft(actionActor, chosenAction) : null"
+            :status="chosenStatus"
             :combatants="combatants"
             @use="useAction"
         />

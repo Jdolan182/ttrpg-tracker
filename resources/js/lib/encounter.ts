@@ -1,5 +1,5 @@
 import { modifier } from '@/lib/stats';
-import type { Combatant, CombatantSide, Creature, CreatureAction, CreatureStat, LimitPeriod } from '@/types/tracker';
+import type { Combatant, CombatantSide, Creature, CreatureAction, CreatureResource, CreatureStat, LimitPeriod } from '@/types/tracker';
 import type { LucideIcon } from 'lucide-vue-next';
 import { ArrowDownToLine, Ban, EarOff, EyeOff, FlaskConical, Frown, Ghost, Grab, Heart, Link, Moon, Mountain, Sparkles, Zap } from 'lucide-vue-next';
 
@@ -53,6 +53,7 @@ export const normalizeCombatants = (combatants: Combatant[], creaturesById: Map<
     for (const combatant of combatants) {
         // An empty object round-trips through PHP as [], and older saves have none at all.
         if (!combatant.used || Array.isArray(combatant.used)) combatant.used = {};
+        if (Array.isArray(combatant.spent)) delete combatant.spent;
         if (Array.isArray(combatant.durations)) delete combatant.durations;
         if (combatant.creatureId === undefined) combatant.creatureId = null;
         // Older saves used 0 for a player who hadn't entered their initiative yet.
@@ -81,19 +82,172 @@ export const limitPeriods: { value: LimitPeriod; label: string; short: string }[
     { value: 'day', label: 'per day', short: 'Day' },
 ];
 
-/** SRD-style label for a limit, e.g. "3/Day". Empty for unlimited actions. */
-export const limitLabel = (action: CreatureAction) =>
-    action.uses ? `${action.uses}/${limitPeriods.find((p) => p.value === action.per)?.short ?? 'Day'}` : '';
+// The kinds of limit an action can have; it has at most one.
+export type LimitKind = 'uses' | 'recharge' | 'cooldown' | 'resource';
 
-/** Uses left for a limited action, or null when it's unlimited. */
+export const limitKind = (action: CreatureAction): LimitKind | null => {
+    if (action.resource) return 'resource';
+    if (action.recharge) return 'recharge';
+    if (action.cooldown) return 'cooldown';
+    if (action.uses) return 'uses';
+    return null;
+};
+
+const periodShort = (per: LimitPeriod | null) => limitPeriods.find((p) => p.value === per)?.short ?? 'Day';
+
+const plural = (count: number | string, word: string) => `${count} ${word}${String(count) === '1' ? '' : 's'}`;
+
+/**
+ * Stat-block label for a limit: "3/Day", "Recharge 5–6", "Recharge 7–8 (d8)", "Cooldown 1d4 rounds",
+ * "Legendary actions: 2". Empty for unlimited actions.
+ */
+export const limitLabel = (action: CreatureAction): string => {
+    switch (limitKind(action)) {
+        case 'uses':
+            return `${action.uses}/${periodShort(action.per)}`;
+        case 'recharge': {
+            const { die, min } = action.recharge!;
+            return `Recharge ${min === die ? die : `${min}–${die}`}${die === 6 ? '' : ` (d${die})`}`;
+        }
+        case 'cooldown':
+            return `Cooldown ${plural(action.cooldown!, 'round')}`;
+        case 'resource':
+            return `${action.resource}: ${action.cost}`;
+        default:
+            return '';
+    }
+};
+
+/** Uses left for an action limited to a number of uses, or null for any other kind. */
 export const usesLeft = (combatant: Combatant, action: CreatureAction): number | null =>
-    action.uses ? Math.max(0, action.uses - (combatant.used[action.name] ?? 0)) : null;
+    limitKind(action) === 'uses' ? Math.max(0, action.uses! - (combatant.used[action.name] ?? 0)) : null;
 
-/** Gives back the uses of any of the creature's actions that reset on one of `periods`. */
+/** How much of a resource a combatant has left. */
+export const resourceLeft = (combatant: Combatant, resource: CreatureResource) => Math.max(0, resource.max - (combatant.spent?.[resource.name] ?? 0));
+
+/** Whether an action can be used now, and a few words on where it stands ("2/3 left", "Ready in 2 rounds"). */
+export const actionStatus = (combatant: Combatant, action: CreatureAction, creature: Creature | undefined): { ready: boolean; status: string } => {
+    const state = combatant.used[action.name] ?? 0;
+    switch (limitKind(action)) {
+        case 'uses': {
+            const left = usesLeft(combatant, action)!;
+            return { ready: left > 0, status: `${left}/${action.uses} left` };
+        }
+        case 'recharge':
+            return state ? { ready: false, status: 'Spent: rolls to recharge each turn' } : { ready: true, status: 'Ready' };
+        case 'cooldown':
+            return state ? { ready: false, status: `Ready in ${plural(state, 'round')}` } : { ready: true, status: 'Ready' };
+        case 'resource': {
+            const resource = creature?.resources.find((r) => r.name === action.resource);
+            // The resource was renamed or removed since: nothing to spend, so nothing stops it.
+            if (!resource) return { ready: true, status: '' };
+            const left = resourceLeft(combatant, resource);
+            // The resource's name is in the limit label next to this, so it isn't repeated here.
+            return { ready: left >= action.cost!, status: `${left}/${resource.max} left` };
+        }
+        default:
+            return { ready: true, status: '' };
+    }
+};
+
+/**
+ * Rolls dice like "1d4", "2d6+1" or "d8", or reads a plain number. Never below 0; anything it can't read is 0.
+ */
+export const rollDice = (expression: string): number => {
+    const text = expression.trim().toLowerCase();
+    if (/^\d+$/.test(text)) return Number(text);
+    const match = /^(\d*)d(\d+)([+-]\d+)?$/.exec(text);
+    if (!match) return 0;
+    const [count, sides, bonus] = [Number(match[1] || 1), Number(match[2]), Number(match[3] ?? 0)];
+    let total = bonus;
+    for (let i = 0; i < count; i++) total += rollDie(Math.max(1, sides));
+    return Math.max(0, total);
+};
+
+/** Records one use of an action against its limit: a use, spending it, starting its cooldown or paying its cost. */
+export const spendAction = (combatant: Combatant, action: CreatureAction) => {
+    const { name } = action;
+    switch (limitKind(action)) {
+        case 'uses':
+            combatant.used[name] = (combatant.used[name] ?? 0) + 1;
+            break;
+        case 'recharge':
+            combatant.used[name] = 1;
+            break;
+        case 'cooldown': {
+            // A cooldown of 0 rounds (say, a 1d4-1 that rolled 0) leaves it ready.
+            const rounds = Math.min(999, rollDice(action.cooldown!));
+            if (rounds > 0) combatant.used[name] = rounds;
+            break;
+        }
+        case 'resource': {
+            const spent = (combatant.spent ??= {});
+            spent[action.resource!] = Math.min(999, (spent[action.resource!] ?? 0) + action.cost!);
+            break;
+        }
+    }
+};
+
+/** What happened to a limited action at the start of its owner's turn, for the history. */
+export interface TurnStartEvent {
+    type: 'recharged' | 'not_recharged';
+    action: string;
+    // The recharge roll; absent when a cooldown ran out.
+    roll?: number;
+}
+
+/**
+ * The start of a combatant's own turn for its limited actions: spent recharge actions roll to come
+ * back, and cooldowns count down a round (coming back at 0). Updates the combatant in place.
+ */
+export const startTurnFor = (combatant: Combatant, creature: Creature | undefined): TurnStartEvent[] => {
+    const events: TurnStartEvent[] = [];
+    for (const action of creature?.actions ?? []) {
+        const state = combatant.used[action.name];
+        if (!state) continue;
+
+        const kind = limitKind(action);
+        if (kind === 'recharge') {
+            const roll = rollDie(action.recharge!.die);
+            const back = roll >= action.recharge!.min;
+            if (back) delete combatant.used[action.name];
+            events.push({ type: back ? 'recharged' : 'not_recharged', action: action.name, roll });
+        } else if (kind === 'cooldown') {
+            if (state > 1) {
+                combatant.used[action.name] = state - 1;
+            } else {
+                delete combatant.used[action.name];
+                events.push({ type: 'recharged', action: action.name });
+            }
+        }
+    }
+    return events;
+};
+
+/**
+ * Refills whatever comes back on one of `periods`: actions' uses and resources with that period.
+ * Recharges and cooldowns only last the fight, so they come back with the "encounter" period too.
+ */
 export const restoreUses = (combatant: Combatant, creature: Creature | undefined, periods: LimitPeriod[]) => {
     for (const action of creature?.actions ?? []) {
-        if (action.per && periods.includes(action.per)) delete combatant.used[action.name];
+        const kind = limitKind(action);
+        const comesBack =
+            (kind === 'uses' && periods.includes(action.per!)) || ((kind === 'recharge' || kind === 'cooldown') && periods.includes('encounter'));
+        if (comesBack) delete combatant.used[action.name];
     }
+    if (!combatant.spent) return;
+    for (const resource of creature?.resources ?? []) {
+        if (periods.includes(resource.per)) delete combatant.spent[resource.name];
+    }
+    if (!Object.keys(combatant.spent).length) delete combatant.spent;
+};
+
+/** Spends or gives back some of a resource by hand (a spell slot used for a spell not listed, say). */
+export const adjustResource = (combatant: Combatant, resource: CreatureResource, delta: number) => {
+    const spent = Math.max(0, Math.min(resource.max, (combatant.spent?.[resource.name] ?? 0) - delta));
+    combatant.spent = { ...(combatant.spent ?? {}), [resource.name]: spent };
+    if (!spent) delete combatant.spent[resource.name];
+    if (!Object.keys(combatant.spent).length) delete combatant.spent;
 };
 
 // The most combatants one fight can have. Mirrors EncounterPayload::MAX_COMBATANTS: the server won't

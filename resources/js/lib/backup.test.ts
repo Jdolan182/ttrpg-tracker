@@ -16,6 +16,7 @@ const creature = (id: number, source: Creature['source'], name: string): Creatur
     stats: [{ label: 'DEX', value: 14 }],
     traits: [],
     actions: [],
+    resources: [],
 });
 
 const combatant = (name: string, creatureId: number | null): Combatant => ({

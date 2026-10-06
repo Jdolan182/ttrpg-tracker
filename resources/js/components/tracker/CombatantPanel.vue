@@ -7,11 +7,25 @@ import StatGrid from '@/components/StatGrid.vue';
 import StatsEditor from '@/components/StatsEditor.vue';
 import ConditionEditor from '@/components/tracker/ConditionEditor.vue';
 import DeathSaves from '@/components/tracker/DeathSaves.vue';
+import Pips from '@/components/tracker/Pips.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useTrackerContext } from '@/composables/tracker/useTracker';
-import { initiativeFormula, limitLabel, sideInfo, switchableSides, usesLeft } from '@/lib/encounter';
-import { Brain, EyeClosed, Pencil, ShieldPlus, Trash2 } from 'lucide-vue-next';
+import {
+    actionStatus,
+    initiativeFormula,
+    limitKind,
+    limitLabel,
+    limitPeriods,
+    resourceLeft,
+    sideInfo,
+    switchableSides,
+    usesLeft,
+} from '@/lib/encounter';
+import type { LimitPeriod } from '@/types/tracker';
+import { Brain, EyeClosed, Minus, Pencil, Plus, ShieldPlus, Trash2 } from 'lucide-vue-next';
+
+const periodLabel = (per: LimitPeriod) => limitPeriods.find((p) => p.value === per)?.label ?? '';
 
 const {
     panelTab,
@@ -29,6 +43,7 @@ const {
     removeCombatant,
     toggleConcentration,
     toggleHidden,
+    changeResource,
     setSide,
     openAction,
     editingStats,
@@ -184,6 +199,41 @@ const {
 
             <ConditionEditor :combatant="selected" />
 
+            <!-- Resources: pools the actions spend from, also adjustable by hand -->
+            <section v-if="selectedCreature?.resources.length" class="space-y-2 border-t border-border pt-4">
+                <h3 class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Resources</h3>
+                <div v-for="resource in selectedCreature.resources" :key="resource.name" class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                    <!-- Its own line on phones, so a long name like "Legendary actions" isn't cut off -->
+                    <span class="min-w-0 basis-full font-medium sm:flex-1 sm:basis-auto sm:truncate">{{ resource.name }}</span>
+                    <Pips :total="resource.max" :left="resourceLeft(selected, resource)" :label="resource.name" />
+                    <span class="text-xs tabular-nums text-muted-foreground">
+                        {{ resourceLeft(selected, resource) }}/{{ resource.max }} · {{ periodLabel(resource.per) }}
+                    </span>
+                    <div class="flex gap-1">
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            class="size-7"
+                            :aria-label="`Spend 1 ${resource.name}`"
+                            :disabled="resourceLeft(selected, resource) === 0"
+                            @click="changeResource(selected, resource, -1)"
+                        >
+                            <Minus />
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            class="size-7"
+                            :aria-label="`Get 1 ${resource.name} back`"
+                            :disabled="resourceLeft(selected, resource) === resource.max"
+                            @click="changeResource(selected, resource, 1)"
+                        >
+                            <Plus />
+                        </Button>
+                    </div>
+                </div>
+            </section>
+
             <!-- Actions: use one to record it (and any damage or healing) in the history -->
             <section v-if="selectedCreature?.actions.length" class="space-y-2 border-t border-border pt-4">
                 <div class="flex items-baseline justify-between">
@@ -194,28 +244,20 @@ const {
                     v-for="action in selectedCreature.actions"
                     :key="action.name"
                     class="flex items-start gap-3 rounded-md border border-border p-2.5"
+                    :class="actionStatus(selected, action, selectedCreature).ready ? '' : 'bg-muted/50'"
                 >
                     <div class="min-w-0 flex-1 text-sm">
                         <p class="flex flex-wrap items-center gap-x-2 gap-y-1">
                             <span class="font-medium">{{ action.name }}</span>
-                            <template v-if="action.uses">
-                                <span
-                                    v-if="action.uses <= 10"
-                                    class="flex gap-0.5"
-                                    role="img"
-                                    :aria-label="`${usesLeft(selected, action)} of ${action.uses} uses left`"
-                                >
-                                    <span
-                                        v-for="n in action.uses"
-                                        :key="n"
-                                        class="size-2 rounded-full border border-primary"
-                                        :class="n <= (usesLeft(selected, action) ?? 0) ? 'bg-primary' : ''"
-                                    />
-                                </span>
-                                <span class="text-xs text-muted-foreground">
-                                    {{ usesLeft(selected, action) }}/{{ action.uses }} left · {{ limitLabel(action) }}
-                                </span>
-                            </template>
+                            <Pips
+                                v-if="limitKind(action) === 'uses'"
+                                :total="action.uses!"
+                                :left="usesLeft(selected, action) ?? 0"
+                                :label="`${action.name} uses`"
+                            />
+                            <span v-if="limitKind(action)" class="text-xs text-muted-foreground">
+                                {{ [actionStatus(selected, action, selectedCreature).status, limitLabel(action)].filter(Boolean).join(' · ') }}
+                            </span>
                         </p>
                         <p class="mt-0.5 line-clamp-2 text-muted-foreground" :title="action.description">{{ action.description }}</p>
                     </div>

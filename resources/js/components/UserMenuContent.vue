@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import UserInfo from '@/components/UserInfo.vue';
 import { DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
-import type { User } from '@/types';
-import { Link } from '@inertiajs/vue3';
-import { LogOut, Settings } from 'lucide-vue-next';
+import type { SharedData, User } from '@/types';
+import { Link, usePage } from '@inertiajs/vue3';
+import { LogOut, MessageSquareHeart, Settings } from 'lucide-vue-next';
 
 interface Props {
     user: User;
 }
 
 defineProps<Props>();
+
+const feedbackUrl = usePage<SharedData>().props.feedbackUrl;
 </script>
 
 <template>
@@ -25,6 +27,12 @@ defineProps<Props>();
                 <Settings class="mr-2 h-4 w-4" />
                 Settings
             </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem v-if="feedbackUrl" :as-child="true">
+            <a class="block w-full" :href="feedbackUrl" target="_blank" rel="noopener">
+                <MessageSquareHeart class="mr-2 h-4 w-4" />
+                Send feedback
+            </a>
         </DropdownMenuItem>
     </DropdownMenuGroup>
     <DropdownMenuSeparator />

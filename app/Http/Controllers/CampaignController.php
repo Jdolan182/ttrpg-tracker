@@ -48,6 +48,8 @@ class CampaignController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:100'],
             'description' => ['nullable', 'string', 'max:5000'],
+            // Optional: left out, the column's default (bands) applies.
+            'enemy_hp' => ['sometimes', 'required', Rule::in(Campaign::ENEMY_HP)],
         ]);
 
         Limits::ensureCanCreate($request->user(), 'campaigns');

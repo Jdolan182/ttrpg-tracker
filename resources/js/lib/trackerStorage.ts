@@ -22,6 +22,7 @@ export interface StoredTracker {
     savedFingerprint?: string;
 }
 
+// Keeps the app's old name: changing the key would lose everyone's fight in progress.
 export const trackerStorageKey = (userId: number | null) => `ttrpg-tracker:encounter:${userId ? `user-${userId}` : 'guest'}`;
 
 export const readTracker = (key: string): StoredTracker | null => {

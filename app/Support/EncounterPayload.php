@@ -24,8 +24,11 @@ class EncounterPayload
         'combat_started', 'round', 'turn', 'damage', 'heal', 'down', 'defeated', 'revived',
         'condition_on', 'condition_off', 'side', 'action', 'joined', 'removed', 'moved', 'sorted', 'initiative_rolled',
         'condition_expired', 'temp_hp', 'concentration', 'death_save', 'stabilized', 'died', 'hidden', 'revealed',
-        'combat_ended',
+        'combat_ended', 'recharged', 'not_recharged',
     ];
+
+    // History only the DM sees (PlayerView leaves it out): e.g. whether an enemy's big attack is back.
+    public const DM_ONLY_LOG_TYPES = ['recharged', 'not_recharged'];
 
     /**
      * @return array<string, mixed>
@@ -57,9 +60,12 @@ class EncounterPayload
             'combatants.*.stats' => ['nullable', 'array', 'max:30'],
             'combatants.*.stats.*.label' => ['required', 'string', 'max:20'],
             'combatants.*.stats.*.value' => ['required', 'integer', 'between:-1000,1000'],
-            // How many times each limited action has been used, keyed by action name.
+            // Limited actions' state, keyed by action name: times used, 1 for a spent recharge, or rounds of cooldown left.
             'combatants.*.used' => ['nullable', 'array', 'max:50'],
             'combatants.*.used.*' => ['integer', 'min:0', 'max:999'],
+            // How much of each of the creature's resources has been spent, keyed by resource name.
+            'combatants.*.spent' => ['nullable', 'array', 'max:20'],
+            'combatants.*.spent.*' => ['integer', 'min:0', 'max:999'],
             // Rounds left on timed conditions, keyed by condition name; counted down at the end of their turn.
             'combatants.*.durations' => ['nullable', 'array', 'max:30'],
             'combatants.*.durations.*' => ['integer', 'min:1', 'max:1000'],
@@ -196,6 +202,11 @@ class EncounterPayload
         $durations = array_intersect_key(array_map('intval', $combatant['durations'] ?? []), array_flip($conditions));
         if ($durations) {
             $attributes['durations'] = $durations;
+        }
+
+        $spent = array_filter(array_map('intval', $combatant['spent'] ?? []), fn (int $amount) => $amount > 0);
+        if ($spent) {
+            $attributes['spent'] = $spent;
         }
 
         if (! empty($combatant['tempHp'])) {

@@ -22,6 +22,7 @@ use Illuminate\Validation\ValidationException;
  */
 class Backup
 {
+    // Keeps the app's old name, so files exported before the rename still import.
     public const FORMAT = 'ttrpg-tracker-backup';
 
     public const VERSION = 1;
@@ -138,7 +139,7 @@ class Backup
                 continue;
             }
 
-            $validator = Validator::make($creature, SaveCreatureRequest::fields(), SaveCreatureRequest::fieldMessages());
+            $validator = Validator::make($creature, SaveCreatureRequest::fields($creature),SaveCreatureRequest::fieldMessages());
             if ($validator->fails()) {
                 throw ValidationException::withMessages([
                     'backup' => "Creature \"{$creature['name']}\" in this backup isn't valid: ".$validator->errors()->first(),

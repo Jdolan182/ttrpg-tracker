@@ -17,10 +17,30 @@ export type CreatureEntry = {
 // When a limited action's uses come back. Mirrors Creature::LIMIT_PERIODS.
 export type LimitPeriod = 'turn' | 'round' | 'encounter' | 'day';
 
+// A recharge roll: at the start of its owner's turn, a spent action comes back on `min` or more on a `die`-sided die.
+export type Recharge = { die: number; min: number };
+
+// An action has at most one kind of limit (see limitKind()); all null means unlimited.
 export type CreatureAction = CreatureEntry & {
-    // Null when the action can be used any number of times.
+    // A number of uses that come back each turn, round, encounter or day.
     uses: number | null;
     per: LimitPeriod | null;
+    // Or: once used, it comes back on a roll.
+    recharge: Recharge | null;
+    // Or: once used, it's unavailable for this many rounds: a number, or dice rolled on use ("1d4").
+    cooldown: string | null;
+    // Or: each use spends `cost` from one of the creature's resources, named here.
+    resource: string | null;
+    cost: number | null;
+};
+
+// A named pool its actions spend from: legendary actions, spell slots, mana, focus points…
+// Mirrors the resources rules in SaveCreatureRequest.
+export type CreatureResource = {
+    name: string;
+    max: number;
+    // When it fills back up.
+    per: LimitPeriod;
 };
 
 // Mirrors App\Models\Creature::toFrontend().
@@ -42,6 +62,7 @@ export interface Creature {
     stats: CreatureStat[];
     traits: CreatureEntry[];
     actions: CreatureAction[];
+    resources: CreatureResource[];
 }
 
 export type CombatantSide = 'player' | 'ally' | 'neutral' | 'enemy';
@@ -60,8 +81,11 @@ export type Combatant = {
     maxHp: number;
     ac: number;
     conditions: string[];
-    // Times each limited action has been used, keyed by action name.
+    // Limited actions' state, keyed by action name. What the number means depends on the limit: times
+    // used (uses per period), 1 while spent (recharge), or rounds left (cooldown). No entry: ready.
     used: Record<string, number>;
+    // How much of each of the creature's resources has been spent, keyed by resource name.
+    spent?: Record<string, number>;
     // Only on quick-added combatants (no creature to take stats from); optional even then.
     stats?: CreatureStat[];
     // Rounds left on timed conditions, keyed by condition name. Counted down at the end of this

@@ -10,8 +10,8 @@ import { computed, ref, watch } from 'vue';
 const props = defineProps<{
     actor: Combatant | undefined;
     action: CreatureAction | undefined;
-    // Null for unlimited actions.
-    usesLeft: number | null;
+    // Whether its limit lets it be used now (see actionStatus()).
+    status: { ready: boolean; status: string } | null;
     combatants: Combatant[];
 }>();
 
@@ -47,7 +47,7 @@ const toggleTarget = (id: string) => {
     error.value = '';
 };
 
-const outOfUses = computed(() => props.usesLeft === 0);
+const notReady = computed(() => props.status?.ready === false);
 
 const submit = () => {
     const value = Number(amount.value);
@@ -79,11 +79,11 @@ const submit = () => {
 
             <form class="space-y-4" @submit.prevent="submit">
                 <p
-                    v-if="outOfUses"
+                    v-if="notReady"
                     class="rounded-md bg-amber-100 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200"
                     role="status"
                 >
-                    No uses left ({{ limitLabel(action) }}). You can still use it; it'll be recorded as normal.
+                    {{ status?.status }} ({{ limitLabel(action) }}). You can still use it; it'll be recorded as normal.
                 </p>
 
                 <fieldset class="space-y-1.5">

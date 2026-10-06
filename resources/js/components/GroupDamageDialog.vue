@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { sideInfo } from '@/lib/encounter';
@@ -69,7 +69,6 @@ const submit = () => {
         <DialogContent class="max-w-lg">
             <DialogHeader>
                 <DialogTitle>Damage or heal several</DialogTitle>
-                <DialogDescription>For area effects like a fireball. Tick ½ for anyone who made their save.</DialogDescription>
             </DialogHeader>
 
             <form class="space-y-4" @submit.prevent="submit">

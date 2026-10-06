@@ -12,7 +12,7 @@ const { combatants, isSetup, activeIndex, selected, selectedId, setInitiative, o
 <template>
     <div class="self-start overflow-hidden rounded-xl border border-border bg-card shadow-sm">
         <div
-            class="grid grid-cols-[1.25rem_3.5rem_minmax(0,1fr)_8rem_3rem] gap-3 border-b border-border bg-muted/60 px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground"
+            class="grid grid-cols-[1rem_2.5rem_minmax(0,1fr)_4.75rem_1.75rem] gap-2 border-b border-border bg-muted/60 px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground sm:grid-cols-[1.25rem_3.5rem_minmax(0,1fr)_8rem_3rem] sm:gap-3"
         >
             <!-- Holds the drag-handle column; an sr-only span would drop out of the grid. -->
             <span aria-hidden="true" />
@@ -28,7 +28,7 @@ const { combatants, isSetup, activeIndex, selected, selectedId, setInitiative, o
                 v-for="(combatant, index) in combatants"
                 :key="combatant.id"
                 data-combatant-row
-                class="grid w-full cursor-pointer grid-cols-[1.25rem_3.5rem_minmax(0,1fr)_8rem_3rem] items-center gap-3 border-b border-l-4 border-b-border py-3 pl-2 pr-3 text-left text-sm transition-colors last:border-b-0 hover:bg-accent"
+                class="grid w-full cursor-pointer grid-cols-[1rem_2.5rem_minmax(0,1fr)_4.75rem_1.75rem] items-center gap-2 border-b border-l-4 border-b-border py-3 pl-2 pr-3 text-left text-sm transition-colors last:border-b-0 hover:bg-accent sm:grid-cols-[1.25rem_3.5rem_minmax(0,1fr)_8rem_3rem] sm:gap-3"
                 :class="[
                     !isSetup && index === activeIndex ? 'border-l-primary bg-primary/[0.07]' : 'border-l-transparent',
                     selected?.id === combatant.id && (isSetup || index !== activeIndex) ? 'bg-accent/70' : '',
@@ -49,7 +49,7 @@ const { combatants, isSetup, activeIndex, selected, selectedId, setInitiative, o
                     :model-value="combatant.initiative ?? ''"
                     type="number"
                     placeholder="–"
-                    class="h-8 w-14 px-2 text-center tabular-nums"
+                    class="h-8 w-full px-1 text-center tabular-nums sm:w-14 sm:px-2"
                     :aria-label="`Initiative for ${combatant.name}`"
                     @click.stop="selectedId = combatant.id"
                     @change="setInitiative(combatant, $event)"

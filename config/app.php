@@ -56,6 +56,13 @@ return [
     // Proxies trusted for X-Forwarded-* headers: "*" or a comma-separated list. Null trusts none.
     'trusted_proxies' => env('TRUSTED_PROXIES'),
 
+    // Where "Send feedback" goes (a form, or "mailto:you@example.com"). Unset, it emails contact_email
+    // (see HandleInertiaRequests), and it's only hidden when there's no address either.
+    'feedback_url' => env('FEEDBACK_URL'),
+
+    // Who to contact about personal data, shown on the privacy page. Falls back to the mail from-address.
+    'contact_email' => env('CONTACT_EMAIL', env('MAIL_FROM_ADDRESS')),
+
     /*
     |--------------------------------------------------------------------------
     | Application URL

@@ -90,6 +90,10 @@ const submit = () => {
                     <LoaderCircle v-if="form.processing" class="h-4 w-4 animate-spin" />
                     Create account
                 </Button>
+                <p class="text-center text-xs text-muted-foreground">
+                    We'll email you a link to confirm your address. See what we keep and why in the
+                    <TextLink :href="route('privacy')" class="underline underline-offset-4" :tabindex="7">privacy note</TextLink>.
+                </p>
             </div>
 
             <div class="text-center text-sm text-muted-foreground">

@@ -1,5 +1,6 @@
 import type { LogEntry } from '@/lib/combatLog';
 import {
+    adjustResource,
     byInitiative,
     combatantsFor,
     concentrationDc,
@@ -13,9 +14,10 @@ import {
     restoreUses,
     rollInitiative,
     sideInfo,
+    startTurnFor,
     type QuickCombatantDetails,
 } from '@/lib/encounter';
-import type { Combatant, CombatantSide, Creature } from '@/types/tracker';
+import type { Combatant, CombatantSide, Creature, CreatureResource } from '@/types/tracker';
 import { computed, ref, type ComputedRef, type Ref } from 'vue';
 import type { FightState } from './types';
 import type { UndoStep } from './useUndo';
@@ -372,13 +374,24 @@ export function useCombat(fight: FightState, { change, addLog, undoStep, pushUnd
 
     // --- Turns ---
 
-    /** Starts the turn of whoever is now active: gives back per-turn uses and records it. */
+    /**
+     * Starts the turn of whoever is now active: gives back per-turn uses and resources, rolls for
+     * spent recharge actions, counts cooldowns down, and records it all.
+     */
     const beginTurn = () => {
         const combatant = combatants.value[activeIndex.value];
         if (!combatant) return;
-        restoreUses(combatant, creatureOf(combatant), ['turn']);
+        const creature = creatureOf(combatant);
+        restoreUses(combatant, creature, ['turn']);
         addLog({ type: 'turn', actor: combatant.name });
+        for (const event of startTurnFor(combatant, creature)) {
+            addLog({ type: event.type, actor: combatant.name, detail: event.action, amount: event.roll });
+        }
     };
+
+    // By hand, for whatever the actions don't cover. Undoable, but not worth a history entry.
+    const changeResource = (combatant: Combatant, resource: CreatureResource, delta: 1 | -1) =>
+        change(`${resource.name} for ${combatant.name}`, () => adjustResource(combatant, resource, delta));
 
     const startCombat = () => {
         if (combatants.value.length === 0) return;
@@ -468,6 +481,7 @@ export function useCombat(fight: FightState, { change, addLog, undoStep, pushUnd
                     combatant.hp = combatant.maxHp;
                     combatant.conditions = [];
                     combatant.used = {};
+                    delete combatant.spent;
                     delete combatant.durations;
                     delete combatant.tempHp;
                     delete combatant.concentrating;
@@ -505,6 +519,7 @@ export function useCombat(fight: FightState, { change, addLog, undoStep, pushUnd
         toggleConcentration,
         resolveConcentration,
         toggleHidden,
+        changeResource,
         toggleCondition,
         setConditionDuration,
         startCombat,

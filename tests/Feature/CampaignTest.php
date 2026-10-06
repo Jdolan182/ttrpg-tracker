@@ -47,6 +47,17 @@ class CampaignTest extends TestCase
         $this->assertSame(40, strlen($campaign->invite_token));
     }
 
+    public function test_enemy_hp_can_be_chosen_when_creating_a_campaign()
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->post('/campaigns', ['name' => 'Open book', 'enemy_hp' => 'exact'])->assertSessionHasNoErrors();
+        $this->assertSame('exact', $user->campaigns()->sole()->enemy_hp);
+
+        $this->actingAs($user)->post('/campaigns', ['name' => 'Nonsense', 'enemy_hp' => 'everything'])->assertSessionHasErrors('enemy_hp');
+        $this->assertSame(1, $user->campaigns()->count());
+    }
+
     public function test_creating_campaigns_stops_at_the_limit()
     {
         $user = User::factory()->create();

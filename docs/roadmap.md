@@ -65,3 +65,10 @@ Decisions agreed for the next stretch of work, in build order. Update this as th
   `encounter_events` table at that point).
 - Subscriptions with Stripe (Laravel Cashier), a pricing page and a public landing page.
 - Encounter difficulty (2014/2024 5e XP budgets) as a 5e rules option.
+- Options to turn off the tracker's automatic bookkeeping, for DMs who'd rather do it by hand: recharge
+  rolls, cooldown countdowns, per-turn/round refills, timed conditions wearing off, monster initiative
+  rolls, concentration prompts and death saves from damage at 0 HP. Each needs its own manual
+  replacement (e.g. a "mark as ready" button for a spent recharge), so add them one at a time, starting
+  with whatever feedback asks for. Today everything automatic is logged and can be undone.
+- Lair actions and scene events: initiative entries that aren't creatures (a lair on initiative 20, a
+  collapsing ceiling, reinforcements). The SRD dragons carry "Lair Actions" as plain text for now.

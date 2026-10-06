@@ -18,6 +18,9 @@ class Creature extends Model
     // the encounter is reset ("encounter" and "day" behave the same inside one fight).
     public const LIMIT_PERIODS = ['turn', 'round', 'encounter', 'day'];
 
+    // Cooldowns: a number of rounds, or dice for it ("1d4", "2d4+1").
+    public const COOLDOWN_PATTERN = '/^(\d{1,3}|\d{0,2}d\d{1,3}([+-]\d{1,3})?)$/i';
+
     /**
      * The attributes that are mass assignable.
      *
@@ -35,6 +38,7 @@ class Creature extends Model
         'stats',
         'traits',
         'actions',
+        'resources',
     ];
 
     /**
@@ -51,6 +55,7 @@ class Creature extends Model
             'stats' => 'array',
             'traits' => 'array',
             'actions' => 'array',
+            'resources' => 'array',
         ];
     }
 
@@ -101,13 +106,18 @@ class Creature extends Model
             'speed' => $this->speed,
             'stats' => $this->stats,
             'traits' => $this->traits,
-            // Actions saved before limits existed have no uses/per; treat them as unlimited.
+            // Actions saved before a kind of limit existed don't have its keys; missing means no such limit.
             'actions' => array_map(fn (array $action) => [
                 'name' => $action['name'],
                 'description' => $action['description'],
                 'uses' => $action['uses'] ?? null,
                 'per' => $action['per'] ?? null,
+                'recharge' => $action['recharge'] ?? null,
+                'cooldown' => $action['cooldown'] ?? null,
+                'resource' => $action['resource'] ?? null,
+                'cost' => $action['cost'] ?? null,
             ], $this->actions),
+            'resources' => $this->resources ?? [],
         ];
     }
 }

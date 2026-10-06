@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import AppLogo from '@/components/AppLogo.vue';
-import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import ThemeToggle from '@/components/ThemeToggle.vue';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -17,7 +16,7 @@ import UserMenuContent from '@/components/UserMenuContent.vue';
 import { getInitials } from '@/composables/useInitials';
 import type { NavItem, SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
-import { BookOpen, Castle, Menu, ScrollText, Swords } from 'lucide-vue-next';
+import { BookOpen, Castle, Menu, MessageSquareHeart, ScrollText, Swords } from 'lucide-vue-next';
 import { computed } from 'vue';
 
 const page = usePage<SharedData>();
@@ -63,7 +62,7 @@ const mainNavItems = computed<NavItem[]>(() => [
                         <SheetContent side="left" class="w-[300px] p-6">
                             <SheetTitle class="sr-only">Navigation Menu</SheetTitle>
                             <SheetHeader class="flex justify-start text-left">
-                                <AppLogoIcon class="size-6 fill-current text-black dark:text-white" />
+                                <AppLogo name-from="always" />
                             </SheetHeader>
                             <div class="flex h-full flex-1 flex-col justify-between space-y-4 py-6">
                                 <nav class="-mx-3 space-y-1">
@@ -78,13 +77,22 @@ const mainNavItems = computed<NavItem[]>(() => [
                                         {{ item.title }}
                                     </Link>
                                 </nav>
+                                <!-- On phones "Log in" lives here, so the header has room -->
+                                <div v-if="!auth.user" class="flex flex-col gap-2 sm:hidden">
+                                    <Button variant="outline" as-child>
+                                        <Link :href="route('login')">Log in</Link>
+                                    </Button>
+                                    <Button as-child>
+                                        <Link :href="route('register')">Create a free account</Link>
+                                    </Button>
+                                </div>
                             </div>
                         </SheetContent>
                     </Sheet>
                 </div>
 
-                <Link :href="route('encounters.index')" class="flex items-center gap-x-2">
-                    <AppLogo class="hidden h-6 xl:block" />
+                <Link :href="route('encounters.index')" class="flex min-w-0 items-center" :aria-label="`${page.props.appName} home`">
+                    <AppLogo />
                 </Link>
 
                 <!-- Desktop Menu -->
@@ -107,9 +115,17 @@ const mainNavItems = computed<NavItem[]>(() => [
                 </div>
 
                 <div class="ml-auto flex items-center gap-2">
+                    <!-- Up here so testers always see it, not just at the bottom of a long page -->
+                    <Button v-if="page.props.feedbackUrl" variant="ghost" size="sm" class="h-9 px-2 md:px-3" as-child>
+                        <a :href="page.props.feedbackUrl" target="_blank" rel="noopener" title="Send feedback">
+                            <MessageSquareHeart class="size-5 md:size-4" />
+                            <span class="hidden md:inline">Feedback</span>
+                            <span class="sr-only md:hidden">Send feedback</span>
+                        </a>
+                    </Button>
                     <ThemeToggle />
                     <template v-if="!auth.user">
-                        <Button variant="ghost" size="sm" as-child>
+                        <Button variant="ghost" size="sm" class="hidden sm:inline-flex" as-child>
                             <Link :href="route('login')">Log in</Link>
                         </Button>
                         <Button size="sm" as-child>

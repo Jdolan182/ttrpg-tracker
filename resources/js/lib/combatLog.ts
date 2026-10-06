@@ -29,7 +29,15 @@ export type LogEntryType =
     | 'died'
     | 'hidden'
     | 'revealed'
-    | 'combat_ended';
+    | 'combat_ended'
+    // A limited action coming back at the start of its owner's turn. actor: whose; detail: the action;
+    // amount: the recharge roll, absent when a cooldown simply ran out. DM only (dmOnlyLogTypes).
+    | 'recharged'
+    | 'not_recharged';
+
+// History players never see: whether an enemy's big attack is back is the DM's secret.
+// Mirrors EncounterPayload::DM_ONLY_LOG_TYPES.
+export const dmOnlyLogTypes: LogEntryType[] = ['recharged', 'not_recharged'];
 
 export type LogEntry = {
     id: string;
@@ -131,6 +139,12 @@ export const describe = (entry: LogEntry): string => {
             return `${targets} was revealed to players`;
         case 'combat_ended':
             return 'Combat ended';
+        case 'recharged':
+            return entry.amount === undefined
+                ? `${entry.actor}'s ${entry.detail} is ready again`
+                : `${entry.actor}'s ${entry.detail} recharged (rolled ${entry.amount})`;
+        case 'not_recharged':
+            return `${entry.actor}'s ${entry.detail} didn't recharge (rolled ${entry.amount})`;
     }
 };
 

@@ -36,7 +36,7 @@ const choose = (value: StatDisplay) => {
             <div class="space-y-6">
                 <HeadingSmall
                     title="Stat display"
-                    description="How stats appear on stat blocks. Modifiers use the d20 rule: every 2 points above 10 is +1."
+                    description="How stats appear on stat blocks. Modifiers use the D&D rule: every 2 points above 10 is +1."
                 />
 
                 <div class="grid gap-3" role="radiogroup" aria-label="Stat display">

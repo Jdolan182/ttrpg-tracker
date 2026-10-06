@@ -1,6 +1,6 @@
 import { confirmAction, confirmOpen } from '@/composables/useConfirm';
 import type { LogEntry } from '@/lib/combatLog';
-import { defaultStatLabels, type ActionEffect } from '@/lib/encounter';
+import { actionStatus, defaultStatLabels, spendAction, type ActionEffect } from '@/lib/encounter';
 import { playerView, playerViewStorageKey, writePlayerView } from '@/lib/playerView';
 import { rowsFromStats, statRows, statsFromRows, type StatRow } from '@/lib/stats';
 import type { SharedData } from '@/types';
@@ -155,6 +155,11 @@ export function useTracker(props: TrackerProps) {
         actionActor.value ? creatureOf(actionActor.value)?.actions.find((a) => a.name === actionName.value) : undefined,
     );
 
+    // Whether the chosen action is ready; the dialog warns, but still lets it be used.
+    const chosenStatus = computed(() =>
+        actionActor.value && chosenAction.value ? actionStatus(actionActor.value, chosenAction.value, creatureOf(actionActor.value)) : null,
+    );
+
     const openAction = (combatant: Combatant, action: CreatureAction) => {
         actionActorId.value = combatant.id;
         actionName.value = action.name;
@@ -168,7 +173,7 @@ export function useTracker(props: TrackerProps) {
 
         const targets = combatants.value.filter((c) => targetIds.includes(c.id));
         undoing.change(`${action.name}`, () => {
-            if (action.uses) actor.used[action.name] = (actor.used[action.name] ?? 0) + 1;
+            spendAction(actor, action);
             undoing.addLog({
                 type: 'action',
                 actor: actor.name,
@@ -298,6 +303,7 @@ export function useTracker(props: TrackerProps) {
         actionOpen,
         actionActor,
         chosenAction,
+        chosenStatus,
         openAction,
         useAction,
         editingStats,

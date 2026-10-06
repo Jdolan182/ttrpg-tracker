@@ -73,7 +73,7 @@ class BackupController extends Controller
      */
     private function download(array $backup, string $name): JsonResponse
     {
-        $filename = 'ttrpg-tracker-'.$name.'-'.now()->format('Y-m-d').'.json';
+        $filename = 'turnkeeper-'.$name.'-'.now()->format('Y-m-d').'.json';
 
         return response()->json($backup, 200, ['Content-Disposition' => "attachment; filename=\"{$filename}\""], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }

@@ -37,6 +37,10 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request): array
     {
         return array_merge(parent::share($request), [
+            'appName' => config('app.name'),
+            // For "Send feedback": the configured form, else an email to the contact address. Null hides it.
+            'feedbackUrl' => config('app.feedback_url')
+                ?: (config('app.contact_email') ? 'mailto:'.config('app.contact_email').'?subject='.rawurlencode(config('app.name').' feedback') : null),
             'auth' => [
                 'user' => $request->user(),
             ],

@@ -7,13 +7,14 @@ import { Input } from '@/components/ui/input';
 import { confirmAction } from '@/composables/useConfirm';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { logEntry } from '@/lib/combatLog';
+import { compendiumSorts, sortCreatures, type CompendiumSort } from '@/lib/compendium';
 import { combatantsFor, initiativeBonus, insertByInitiative, MAX_COMBATANTS } from '@/lib/encounter';
 import { readTracker, trackerStorageKey, writeTracker } from '@/lib/trackerStorage';
 import type { SharedData } from '@/types';
 import type { Creature, CreatureKind, CreatureSource } from '@/types/tracker';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
-import { Copy, Pencil, Plus, Search, Swords, Trash2 } from 'lucide-vue-next';
-import { computed, ref } from 'vue';
+import { ArrowUp, Copy, Pencil, Plus, Search, Swords, Trash2 } from 'lucide-vue-next';
+import { computed, nextTick, ref, watch } from 'vue';
 
 const props = defineProps<{
     creatures: Creature[];
@@ -48,17 +49,42 @@ const source = ref<CreatureSource | 'all'>('all');
 const chosenId = ref<number | null>(props.selectedId);
 const notice = ref('');
 
+const sort = ref<CompendiumSort>('name');
+
 const results = computed(() => {
     const term = search.value.trim().toLowerCase();
 
-    return props.creatures
-        .filter((c) => kind.value === 'all' || c.kind === kind.value)
-        .filter((c) => source.value === 'all' || c.source === source.value)
-        .filter((c) => !term || c.name.toLowerCase().includes(term) || c.summary.toLowerCase().includes(term));
+    return sortCreatures(
+        props.creatures
+            .filter((c) => kind.value === 'all' || c.kind === kind.value)
+            .filter((c) => source.value === 'all' || c.source === source.value)
+            .filter((c) => !term || c.name.toLowerCase().includes(term) || c.summary.toLowerCase().includes(term)),
+        sort.value,
+    );
 });
+
+// Hundreds of SRD monsters: the list shows a batch at a time. Everything is already loaded, so search,
+// filters and sorting still cover all of them; a new search starts again from the first batch.
+const BATCH = 50;
+const shown = ref(BATCH);
+const visible = computed(() => results.value.slice(0, shown.value));
+watch([search, kind, source, sort], () => (shown.value = BATCH));
 
 // Keep showing the chosen creature while it matches the filters, otherwise fall back to the first result.
 const selected = computed(() => results.value.find((c) => c.id === chosenId.value) ?? results.value[0]);
+
+// A creature linked to (just created or edited) is in the list even when it's past the first batch.
+const linkedIndex = results.value.findIndex((c) => c.id === props.selectedId);
+if (linkedIndex >= BATCH) shown.value = Math.ceil((linkedIndex + 1) / BATCH) * BATCH;
+
+// On phones the stat block is below the list, so choosing a creature jumps down to it, and back.
+const list = ref<HTMLElement | null>(null);
+const detail = ref<HTMLElement | null>(null);
+const stacked = () => !window.matchMedia('(min-width: 1024px)').matches;
+const choose = (creature: Creature) => {
+    chosenId.value = creature.id;
+    if (stacked()) nextTick(() => detail.value?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+};
 
 const filterButtonClass = (active: boolean) =>
     active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground';
@@ -151,7 +177,7 @@ const deleteCreature = async (creature: Creature) => {
             <div class="flex flex-wrap items-center gap-3">
                 <div class="relative w-full sm:w-72">
                     <Search class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input v-model="search" type="search" placeholder="Search goblin, undead, ranger" class="pl-9" aria-label="Search creatures" />
+                    <Input v-model="search" type="search" placeholder="Search" class="pl-9" aria-label="Search creatures" />
                 </div>
 
                 <div class="flex rounded-md border border-border p-0.5" role="group" aria-label="Creature type">
@@ -181,6 +207,13 @@ const deleteCreature = async (creature: Creature) => {
                         {{ filter.label }}
                     </button>
                 </div>
+
+                <label class="flex items-center gap-2 text-sm text-muted-foreground">
+                    Sort by
+                    <select v-model="sort" class="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground">
+                        <option v-for="option in compendiumSorts" :key="option.value" :value="option.value">{{ option.label }}</option>
+                    </select>
+                </label>
             </div>
 
             <p v-if="notice" class="text-sm text-emerald-700 dark:text-emerald-400" role="status">
@@ -189,18 +222,22 @@ const deleteCreature = async (creature: Creature) => {
             </p>
 
             <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
-                <!-- Results -->
-                <div class="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-                    <p class="border-b border-border px-4 py-2 text-xs text-muted-foreground">
+                <!-- Results: on wide screens a panel that scrolls on its own, next to the stat block -->
+                <div
+                    ref="list"
+                    class="scroll-mt-4 overflow-hidden rounded-xl border border-border bg-card shadow-sm lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:self-start lg:overflow-y-auto"
+                >
+                    <p class="sticky top-0 z-10 border-b border-border bg-card px-4 py-2 text-xs text-muted-foreground">
                         {{ results.length }} {{ results.length === 1 ? 'creature' : 'creatures' }}
+                        <template v-if="results.length > visible.length">, showing {{ visible.length }}</template>
                     </p>
                     <button
-                        v-for="creature in results"
+                        v-for="creature in visible"
                         :key="creature.id"
                         type="button"
                         class="flex w-full items-center gap-3 border-b border-l-4 border-b-border px-4 py-3 text-left text-sm transition-colors last:border-b-0 hover:bg-accent"
                         :class="selected?.id === creature.id ? 'border-l-primary bg-accent/60' : 'border-l-transparent'"
-                        @click="chosenId = creature.id"
+                        @click="choose(creature)"
                     >
                         <span class="min-w-0 flex-1">
                             <span class="block truncate font-medium">{{ creature.name }}</span>
@@ -211,6 +248,12 @@ const deleteCreature = async (creature: Creature) => {
                             <span class="block">{{ kindLabels[creature.kind] }} · {{ creature.source === 'srd' ? 'SRD' : 'Homebrew' }}</span>
                         </span>
                     </button>
+                    <div v-if="results.length > visible.length" class="border-t border-border p-3">
+                        <Button variant="outline" size="sm" class="w-full" @click="shown += BATCH">
+                            Show {{ Math.min(BATCH, results.length - visible.length) }} more
+                            <span class="text-muted-foreground">({{ results.length - visible.length }} left)</span>
+                        </Button>
+                    </div>
                     <div v-if="results.length === 0" class="px-4 py-10 text-center text-sm text-muted-foreground">
                         <template v-if="source === 'homebrew' && !search && kind === 'all'">
                             You haven't made any creatures yet.
@@ -221,7 +264,15 @@ const deleteCreature = async (creature: Creature) => {
                 </div>
 
                 <!-- Detail -->
-                <div v-if="selected" class="space-y-4 rounded-xl border border-border bg-card p-4 shadow-sm">
+                <div v-if="selected" ref="detail" class="scroll-mt-4 space-y-4 rounded-xl border border-border bg-card p-4 shadow-sm">
+                    <button
+                        type="button"
+                        class="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground lg:hidden"
+                        @click="list?.scrollIntoView({ behavior: 'smooth', block: 'start' })"
+                    >
+                        <ArrowUp class="size-4" />
+                        Back to the list
+                    </button>
                     <div class="flex flex-wrap items-center gap-2">
                         <h2 class="mr-auto text-lg font-semibold">{{ selected.name }}</h2>
                         <Button variant="outline" size="sm" @click="addToEncounter(selected)">

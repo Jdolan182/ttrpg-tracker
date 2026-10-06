@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import EnemyHpPicker from '@/components/EnemyHpPicker.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { confirmAction } from '@/composables/useConfirm';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { SharedData } from '@/types';
+import type { EnemyHpDisplay } from '@/types/tracker';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { Castle, Plus, Swords, Trash2, UsersRound } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
@@ -32,7 +34,8 @@ const deleteCampaign = async (campaign: { id: number; name: string; players: num
 };
 
 const creating = ref(false);
-const form = useForm({ name: '', description: '' });
+// Bands is the usual table habit ("it looks badly hurt"), so it's where a new campaign starts.
+const form = useForm({ name: '', description: '', enemy_hp: 'bands' as EnemyHpDisplay });
 const create = () => form.post(route('campaigns.store'));
 // The server's limit check isn't one of the form's fields, so its error needs looking up by name.
 const limitError = computed(() => (form.errors as Record<string, string | undefined>).limit);
@@ -64,7 +67,7 @@ const textareaClass =
             <form v-if="creating" class="space-y-4 rounded-xl border border-border bg-card p-4 shadow-sm" @submit.prevent="create">
                 <div class="grid gap-1.5">
                     <Label for="campaign-name">Name</Label>
-                    <Input id="campaign-name" v-model="form.name" required maxlength="100" placeholder="Curse of the Crimson Keep" />
+                    <Input id="campaign-name" v-model="form.name" required maxlength="100" placeholder="Campaign Name" />
                     <InputError :message="form.errors.name" />
                 </div>
                 <div class="grid gap-1.5">
@@ -78,6 +81,8 @@ const textareaClass =
                     />
                     <InputError :message="form.errors.description" />
                 </div>
+                <EnemyHpPicker v-model="form.enemy_hp" />
+                <InputError :message="form.errors.enemy_hp" />
                 <InputError :message="limitError" />
                 <div class="flex justify-end gap-2">
                     <Button type="button" variant="outline" @click="creating = false">Cancel</Button>
@@ -130,7 +135,12 @@ const textareaClass =
             <section class="space-y-3">
                 <div class="flex items-baseline gap-3">
                     <h2 class="text-lg font-semibold">You're playing</h2>
-                    <span v-if="joinedLimit && playing.length" class="text-xs tabular-nums text-muted-foreground">
+                    <!-- Shown even at 0, so it's clear joining has its own limit, apart from the campaigns you run -->
+                    <span
+                        v-if="joinedLimit"
+                        class="text-xs tabular-nums"
+                        :class="joinedLimit.used >= joinedLimit.limit ? 'font-medium text-amber-700 dark:text-amber-400' : 'text-muted-foreground'"
+                    >
                         {{ joinedLimit.used }} of {{ joinedLimit.limit }} joined
                     </span>
                 </div>
@@ -151,7 +161,9 @@ const textareaClass =
                         </p>
                     </Link>
                 </div>
-                <p v-else class="text-sm text-muted-foreground">When a DM sends you an invite link, the campaign shows up here.</p>
+                <p v-else class="text-sm text-muted-foreground">
+                    When a DM sends you an invite link, the campaign shows up here. Campaigns you join don't count towards the ones you run.
+                </p>
             </section>
         </div>
     </AppLayout>

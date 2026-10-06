@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import StatGrid from '@/components/StatGrid.vue';
-import { initiativeBonus, initiativeFormula, limitLabel } from '@/lib/encounter';
+import { initiativeBonus, initiativeFormula, limitLabel, limitPeriods } from '@/lib/encounter';
 import { formatModifier } from '@/lib/stats';
 import type { Creature } from '@/types/tracker';
 import { computed } from 'vue';
@@ -53,11 +53,19 @@ const initiative = computed(() => initiativeBonus(props.creature));
             </p>
         </section>
 
+        <section v-if="creature.resources.length && !hideActions" class="space-y-1 border-t border-border pt-3">
+            <h3 class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Resources</h3>
+            <p v-for="resource in creature.resources" :key="resource.name">
+                <span class="font-medium">{{ resource.name }}:</span>
+                {{ resource.max }} {{ limitPeriods.find((p) => p.value === resource.per)?.label }}
+            </p>
+        </section>
+
         <section v-if="creature.actions.length && !hideActions" class="space-y-2 border-t border-border pt-3">
             <h3 class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Actions</h3>
             <p v-for="action in creature.actions" :key="action.name">
                 <span class="font-medium italic"
-                    >{{ action.name }}<template v-if="action.uses"> ({{ limitLabel(action) }})</template>.</span
+                    >{{ action.name }}<template v-if="limitLabel(action)"> ({{ limitLabel(action) }})</template>.</span
                 >
                 {{ action.description }}
             </p>

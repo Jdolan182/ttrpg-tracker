@@ -40,7 +40,7 @@ class PlayerView
 
     /**
      * The history without anything players shouldn't know: entries about combatants while they
-     * were hidden, setup, the DM's hide/reveal bookkeeping, and (unless enemy HP is exact) how much
+     * were hidden, setup, the DM's bookkeeping (hide/reveal, recharge rolls), and (unless enemy HP is exact) how much
      * enemies healed. Damage stays: players hear that at the table.
      *
      * Who was hidden when is worked out by walking back from now: a "hidden" entry means they
@@ -76,7 +76,7 @@ class PlayerView
 
                 continue;
             }
-            if ($entry['round'] < 1) {
+            if ($entry['round'] < 1 || in_array($entry['type'], EncounterPayload::DM_ONLY_LOG_TYPES, true)) {
                 continue;
             }
 

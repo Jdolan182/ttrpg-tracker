@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import EnemyHpPicker from '@/components/EnemyHpPicker.vue';
 import InputError from '@/components/InputError.vue';
 import PlayerCombatView from '@/components/PlayerCombatView.vue';
 import StatBlock from '@/components/StatBlock.vue';
@@ -62,12 +63,6 @@ const endCombat = async () => {
     if (!ok) return;
     router.delete(route('campaigns.combat.destroy', props.campaign.id), { preserveScroll: true, onSuccess: refreshFight });
 };
-
-const enemyHpOptions: { value: EnemyHpDisplay; label: string; hint: string }[] = [
-    { value: 'bands', label: 'Bands', hint: 'Healthy, Bloodied or Down' },
-    { value: 'exact', label: 'Exact HP', hint: 'The real numbers' },
-    { value: 'hidden', label: 'Hidden', hint: "Players can't tell how hurt enemies are" },
-];
 
 // --- Details (DM) ---
 const editing = ref(false);
@@ -234,23 +229,8 @@ const selectClass = 'h-9 min-w-0 flex-1 rounded-md border border-input bg-backgr
                     <textarea id="campaign-description" v-model="details.description" maxlength="5000" :class="textareaClass" />
                     <InputError :message="details.errors.description" />
                 </div>
-                <fieldset class="space-y-1.5">
-                    <legend class="text-sm font-medium">What players see of enemy HP</legend>
-                    <div class="flex flex-wrap gap-2">
-                        <label
-                            v-for="option in enemyHpOptions"
-                            :key="option.value"
-                            class="flex cursor-pointer items-start gap-2 rounded-md border px-3 py-2 text-sm"
-                            :class="details.enemy_hp === option.value ? 'border-primary ring-1 ring-primary' : 'border-border'"
-                        >
-                            <input v-model="details.enemy_hp" type="radio" name="enemy_hp" :value="option.value" class="mt-1" />
-                            <span>
-                                <span class="block font-medium">{{ option.label }}</span>
-                                <span class="block text-xs text-muted-foreground">{{ option.hint }}</span>
-                            </span>
-                        </label>
-                    </div>
-                </fieldset>
+                <EnemyHpPicker v-model="details.enemy_hp" />
+                <InputError :message="details.errors.enemy_hp" />
                 <div class="flex flex-wrap items-center gap-2">
                     <Button type="button" variant="outline" class="ml-auto" @click="editing = false">Cancel</Button>
                     <Button type="submit" :disabled="details.processing">Save</Button>

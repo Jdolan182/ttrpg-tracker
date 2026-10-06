@@ -41,6 +41,24 @@ class CreatureTest extends TestCase
         $this->assertSame(['label' => 'STR', 'value' => 8], Creature::find($goblinId)->stats[0]);
     }
 
+    public function test_the_srd_monsters_come_with_their_limits_in_the_apps_own_terms()
+    {
+        $this->seed(SrdCreatureSeeder::class);
+        $this->assertGreaterThan(300, Creature::whereNull('user_id')->count());
+
+        $dragon = collect(Creature::where('name', 'Adult Red Dragon')->sole()->toFrontend());
+        $actions = collect($dragon['actions'])->keyBy('name');
+        $this->assertEquals(['die' => 6, 'min' => 5], $actions['Fire Breath']['recharge']);
+        $this->assertSame([3, 'day'], [$actions['Legendary Resistance']['uses'], $actions['Legendary Resistance']['per']]);
+        $this->assertSame(['Legendary actions', 2], [$actions['Wing Attack']['resource'], $actions['Wing Attack']['cost']]);
+        $this->assertEquals([['name' => 'Legendary actions', 'max' => 3, 'per' => 'turn']], $dragon['resources']);
+
+        $lich = Creature::where('name', 'Lich')->sole()->toFrontend();
+        // assertEquals rather than assertContains: jsonb keeps object keys in its own order.
+        $this->assertEquals(['name' => 'Level 9 spell slots', 'max' => 1, 'per' => 'day'], collect($lich['resources'])->firstWhere('name', 'Level 9 spell slots'));
+        $this->assertSame('npc', Creature::where('name', 'Mage')->value('kind'));
+    }
+
     public function test_the_initiative_bonus_is_optional_and_kept_when_set()
     {
         $user = User::factory()->create();
@@ -76,7 +94,59 @@ class CreatureTest extends TestCase
             'description' => 'Ranged spell attack: +5 to hit. Hit: 7 necrotic damage.',
             'uses' => null,
             'per' => null,
+            'recharge' => null,
+            'cooldown' => null,
+            'resource' => null,
+            'cost' => null,
         ]], $creature->actions);
+        $this->assertSame([], $creature->resources);
+    }
+
+    public function test_actions_can_recharge_cool_down_or_spend_resources()
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->post('/compendium', $this->payload([
+            'resources' => [
+                ['name' => 'Legendary actions', 'max' => '3', 'per' => 'turn'],
+                ['name' => 'Mana', 'max' => 10, 'per' => 'day'],
+            ],
+            'actions' => [
+                ['name' => 'Fire Breath', 'description' => 'Whoosh.', 'recharge' => ['die' => '6', 'min' => '5']],
+                ['name' => 'Quake', 'description' => 'Rumble.', 'cooldown' => '1D4'],
+                ['name' => 'Wing Attack', 'description' => 'Flap.', 'resource' => 'Legendary actions', 'cost' => '2'],
+            ],
+        ]))->assertSessionHasNoErrors();
+
+        $creature = $user->creatures()->sole();
+        [$breath, $quake, $wing] = $creature->toFrontend()['actions'];
+        $this->assertEquals(['die' => 6, 'min' => 5], $breath['recharge']);
+        $this->assertSame('1d4', $quake['cooldown']);
+        $this->assertSame(['Legendary actions', 2], [$wing['resource'], $wing['cost']]);
+        $this->assertNull($wing['uses']);
+        $this->assertEquals(['name' => 'Mana', 'max' => 10, 'per' => 'day'], $creature->toFrontend()['resources'][1]);
+    }
+
+    public function test_each_action_has_one_kind_of_limit_and_only_spends_its_own_resources()
+    {
+        $this->actingAs(User::factory()->create())
+            ->post('/compendium', $this->payload([
+                'resources' => [
+                    ['name' => 'Ki', 'max' => 3, 'per' => 'encounter'],
+                    ['name' => 'ki', 'max' => 0, 'per' => 'week'],
+                ],
+                'actions' => [
+                    ['name' => 'Both', 'description' => 'x', 'uses' => 1, 'per' => 'day', 'recharge' => ['die' => 6, 'min' => 5]],
+                    ['name' => 'Impossible', 'description' => 'x', 'recharge' => ['die' => 6, 'min' => 7]],
+                    ['name' => 'Vague', 'description' => 'x', 'cooldown' => 'a while'],
+                    ['name' => 'Borrowed', 'description' => 'x', 'resource' => 'Spell slots', 'cost' => 1],
+                    ['name' => 'Free', 'description' => 'x', 'resource' => 'Ki'],
+                ],
+            ]))
+            ->assertSessionHasErrors([
+                'actions.0.uses', 'actions.1.recharge.min', 'actions.2.cooldown', 'actions.3.resource', 'actions.4.cost',
+                'resources.1.name', 'resources.1.max', 'resources.1.per',
+            ]);
     }
 
     public function test_actions_can_have_a_usage_limit()

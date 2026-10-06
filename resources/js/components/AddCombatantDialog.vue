@@ -228,13 +228,7 @@ const tabClass = (active: boolean) =>
                 <template v-if="tab === 'compendium'">
                     <div class="relative">
                         <Search class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                            v-model="search"
-                            type="search"
-                            placeholder="Search goblin, undead, ranger"
-                            class="pl-9"
-                            aria-label="Search creatures"
-                        />
+                        <Input v-model="search" type="search" placeholder="Search" class="pl-9" aria-label="Search creatures" />
                     </div>
 
                     <div class="max-h-64 overflow-y-auto rounded-md border border-border" role="listbox" aria-label="Creatures">

@@ -1,6 +1,7 @@
-import type { Combatant, Creature } from '@/types/tracker';
+import type { Combatant, Creature, CreatureAction } from '@/types/tracker';
 import { describe, expect, it } from 'vitest';
 import {
+    actionStatus,
     byInitiative,
     combatantsFor,
     concentrationDc,
@@ -10,8 +11,10 @@ import {
     insertByInitiative,
     isDead,
     isStable,
+    limitLabel,
     normalizeCombatants,
     quickCombatant,
+    rollDice,
     rollInitiative,
 } from './encounter';
 
@@ -29,6 +32,7 @@ const creature = (overrides: Partial<Creature> = {}): Creature => ({
     stats: [{ label: 'DEX', value: 14 }],
     traits: [],
     actions: [],
+    resources: [],
     ...overrides,
 });
 
@@ -44,6 +48,44 @@ const combatant = (name: string, initiative: number, overrides: Partial<Combatan
     conditions: [],
     used: {},
     ...overrides,
+});
+
+describe('limits', () => {
+    const none = { uses: null, per: null, recharge: null, cooldown: null, resource: null, cost: null };
+    const action = (limit: Partial<CreatureAction>): CreatureAction => ({ name: 'Breath', description: '', ...none, ...limit });
+
+    it('labels each kind the way a stat block would', () => {
+        expect(limitLabel(action({}))).toBe('');
+        expect(limitLabel(action({ uses: 3, per: 'day' }))).toBe('3/Day');
+        expect(limitLabel(action({ recharge: { die: 6, min: 5 } }))).toBe('Recharge 5–6');
+        expect(limitLabel(action({ recharge: { die: 6, min: 6 } }))).toBe('Recharge 6');
+        expect(limitLabel(action({ recharge: { die: 8, min: 7 } }))).toBe('Recharge 7–8 (d8)');
+        expect(limitLabel(action({ cooldown: '1d4' }))).toBe('Cooldown 1d4 rounds');
+        expect(limitLabel(action({ cooldown: '1' }))).toBe('Cooldown 1 round');
+        expect(limitLabel(action({ resource: 'Mana', cost: 2 }))).toBe('Mana: 2');
+    });
+
+    it('says whether a resource action is affordable', () => {
+        const mage = creature({ resources: [{ name: 'Mana', max: 3, per: 'encounter' }] });
+        const zap = action({ resource: 'Mana', cost: 2 });
+        const who = combatant('Mage', 10);
+        expect(actionStatus(who, zap, mage)).toEqual({ ready: true, status: '3/3 left' });
+        who.spent = { Mana: 2 };
+        expect(actionStatus(who, zap, mage)).toEqual({ ready: false, status: '1/3 left' });
+        // A resource that's since been removed doesn't block anything.
+        expect(actionStatus(who, zap, creature()).ready).toBe(true);
+    });
+
+    it('rolls dice for cooldowns, and reads plain numbers', () => {
+        expect(rollDice('3')).toBe(3);
+        expect(rollDice('nonsense')).toBe(0);
+        for (let i = 0; i < 50; i++) {
+            const roll = rollDice('2d4+1');
+            expect(roll).toBeGreaterThanOrEqual(3);
+            expect(roll).toBeLessThanOrEqual(9);
+        }
+        expect(rollDice('d1-5')).toBe(0);
+    });
 });
 
 describe('initiative bonus', () => {

@@ -9,10 +9,17 @@ use App\Http\Controllers\CampaignPlayerController;
 use App\Http\Controllers\CreatureController;
 use App\Http\Controllers\EncounterController;
 use Illuminate\Support\Facades\Route;
+use Inertia\Inertia;
 
 // Guests can run encounters and browse the compendium; saving anything requires an account.
 Route::get('/', [EncounterController::class, 'index'])->name('encounters.index');
 Route::get('compendium', [CreatureController::class, 'index'])->name('compendium.index');
+
+// What's kept about you and why, in plain words. Mentions error tracking only when it's switched on.
+Route::get('privacy', fn () => Inertia::render('Privacy', [
+    'contactEmail' => config('app.contact_email'),
+    'errorTracking' => (bool) config('sentry.dsn'),
+]))->name('privacy');
 
 // Invite links work for guests too: the page asks them to log in or sign up, then brings them back.
 Route::get('join/{token}', [CampaignPlayerController::class, 'show'])->name('campaigns.join');

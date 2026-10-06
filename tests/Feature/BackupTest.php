@@ -54,7 +54,7 @@ class BackupTest extends TestCase
 
         $response = $this->actingAs($user)->get('/backup')->assertOk();
 
-        $this->assertStringContainsString('attachment; filename="ttrpg-tracker-backup-', $response->headers->get('Content-Disposition'));
+        $this->assertStringContainsString('attachment; filename="turnkeeper-backup-', $response->headers->get('Content-Disposition'));
         $backup = $response->json();
         $this->assertSame(Backup::FORMAT, $backup['format']);
         $this->assertSame(Backup::VERSION, $backup['version']);
@@ -85,7 +85,7 @@ class BackupTest extends TestCase
 
         $backup = $this->actingAs($user)->get("/encounters/{$encounter->id}/export")
             ->assertOk()
-            ->assertHeader('Content-Disposition', 'attachment; filename="ttrpg-tracker-swamp-ambush-'.now()->format('Y-m-d').'.json"')
+            ->assertHeader('Content-Disposition', 'attachment; filename="turnkeeper-swamp-ambush-'.now()->format('Y-m-d').'.json"')
             ->json();
 
         $this->assertEqualsCanonicalizing(['Bog Ogre', 'Goblin'], array_column($backup['creatures'], 'name'));
@@ -135,6 +135,31 @@ class BackupTest extends TestCase
 
         $this->assertSame(4, $friend->creatures()->sole()->initiative_bonus);
         $this->assertNull(collect($friend->encounters()->sole()->combatants)->firstWhere('name', 'Borin')['initiative']);
+    }
+
+    public function test_resources_and_every_kind_of_limit_survive_a_round_trip()
+    {
+        [$dm, $ogre] = $this->dmWithEncounter();
+        $ogre->update([
+            'resources' => [['name' => 'Legendary actions', 'max' => 3, 'per' => 'turn']],
+            'actions' => [
+                ['name' => 'Breath', 'description' => 'Whoosh.', 'uses' => null, 'per' => null, 'recharge' => ['die' => 6, 'min' => 5], 'cooldown' => null, 'resource' => null, 'cost' => null],
+                ['name' => 'Quake', 'description' => 'Rumble.', 'uses' => null, 'per' => null, 'recharge' => null, 'cooldown' => '1d4', 'resource' => null, 'cost' => null],
+                ['name' => 'Wing', 'description' => 'Flap.', 'uses' => null, 'per' => null, 'recharge' => null, 'cooldown' => null, 'resource' => 'Legendary actions', 'cost' => 2],
+            ],
+        ]);
+        $backup = $this->actingAs($dm)->get('/backup')->json();
+        $friend = User::factory()->create();
+
+        $this->upload($friend, $backup)->assertSessionHasNoErrors();
+        $this->assertEquals(
+            collect($ogre->fresh()->toFrontend())->only('actions', 'resources')->all(),
+            collect($friend->creatures()->sole()->toFrontend())->only('actions', 'resources')->all(),
+        );
+
+        // Importing it again recognises it as the same creature.
+        $this->upload($friend, $backup)->assertSessionHasNoErrors();
+        $this->assertSame(1, $friend->creatures()->count());
     }
 
     public function test_importing_again_reuses_identical_creatures()

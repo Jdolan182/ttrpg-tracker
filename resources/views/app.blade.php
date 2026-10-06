@@ -13,6 +13,9 @@
             } catch (e) {}
         </script>
 
+        {{-- Browsers keep tab icons long after a reload; bump ?v= when the icon changes. --}}
+        <link rel="icon" href="/favicon.svg?v=2" type="image/svg+xml">
+
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=fraunces:500,600|instrument-sans:400,500,600" rel="stylesheet" />
 
