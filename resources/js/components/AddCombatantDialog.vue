@@ -47,10 +47,18 @@ const count = ref<number | string>(1);
 const initiative = ref<number | string>('');
 const side = ref<CombatantSide>('enemy');
 
+// Your own creatures (the party, your homebrew) first, so they aren't lost among hundreds of SRD monsters.
 const results = computed(() => {
     const term = search.value.trim().toLowerCase();
-    return props.creatures.filter((c) => !term || c.name.toLowerCase().includes(term) || c.summary.toLowerCase().includes(term));
+    const matching = props.creatures.filter((c) => !term || c.name.toLowerCase().includes(term) || c.summary.toLowerCase().includes(term));
+    return [...matching.filter((c) => c.source === 'homebrew'), ...matching.filter((c) => c.source !== 'homebrew')];
 });
+
+// A batch at a time, like the compendium; searching covers everything and starts again from the top.
+const BATCH = 50;
+const shown = ref(BATCH);
+const visible = computed(() => results.value.slice(0, shown.value));
+watch(search, () => (shown.value = BATCH));
 
 const selected = computed(() => props.creatures.find((c) => c.id === selectedId.value));
 const isPlayer = computed(() => selected.value?.kind === 'player');
@@ -79,6 +87,7 @@ const resetQuick = () => {
 watch(open, (isOpen) => {
     if (!isOpen) return;
     search.value = '';
+    shown.value = BATCH;
     selectedId.value = null;
     count.value = 1;
     initiative.value = '';
@@ -233,7 +242,7 @@ const tabClass = (active: boolean) =>
 
                     <div class="max-h-64 overflow-y-auto rounded-md border border-border" role="listbox" aria-label="Creatures">
                         <button
-                            v-for="creature in results"
+                            v-for="creature in visible"
                             :key="creature.id"
                             type="button"
                             role="option"
@@ -252,6 +261,12 @@ const tabClass = (active: boolean) =>
                             </span>
                             <span class="shrink-0 text-xs text-muted-foreground">{{ creature.rating }} · HP {{ creature.hp }}</span>
                         </button>
+                        <div v-if="results.length > visible.length" class="border-t border-border p-2">
+                            <Button type="button" variant="ghost" size="sm" class="w-full" @click="shown += BATCH">
+                                Show {{ Math.min(BATCH, results.length - visible.length) }} more
+                                <span class="text-muted-foreground">({{ results.length - visible.length }} left)</span>
+                            </Button>
+                        </div>
                         <p v-if="results.length === 0" class="px-3 py-6 text-center text-sm text-muted-foreground">
                             No creatures match that search. Try Quick add instead.
                         </p>

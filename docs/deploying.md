@@ -1,103 +1,106 @@
 # Deploying
 
-What it takes to run the app somewhere real, for a feedback round and beyond. The server setup itself
-(Docker Compose or Forge on Hetzner) will get its own section once it's chosen; everything here applies
-either way.
+How Turnkeeper runs at https://theturnkeeper.app: one Hetzner server running Ubuntu 24.04, set up by
+[deploy/server/setup.sh](../deploy/server/setup.sh) and updated with
+[deploy/server/deploy.sh](../deploy/server/deploy.sh). Both were tried end to end on a fresh Ubuntu 24.04.
 
 ## What runs
 
-| Part | What it does | Notes |
+| Part | What it does | Set up as |
 |---|---|---|
-| The Laravel app (PHP 8.2+) | Pages and the API | Needs the `pgsql` PHP extension |
-| PostgreSQL 16+ | All the data | Back it up (see below) |
-| Reverb (`php artisan reverb:start`) | Live player view | A long-running process: keep it running with Supervisor, systemd or a container |
-| A proxy with HTTPS (e.g. Caddy) | Certificates, and forwarding `/app` and `/apps` to Reverb | Caddy gets and renews certificates by itself |
+| Caddy | HTTPS (gets and renews certificates itself), serves the app, forwards `/app` and `/apps` to Reverb | `/etc/caddy/Caddyfile`, from [deploy/server/Caddyfile](../deploy/server/Caddyfile) |
+| PHP 8.4 (FPM) | The Laravel app, running as the `turnkeeper` user | pool from [php-fpm-pool.conf](../deploy/server/php-fpm-pool.conf) |
+| PostgreSQL 18 | All the data | database and user `turnkeeper` |
+| Reverb | Live player view (websockets), on 127.0.0.1:8080 only | `turnkeeper-reverb` systemd service |
+| Backups | `pg_dump` every night at 03:15, kept 14 days | `/etc/cron.d/turnkeeper-backup`, files in `/var/backups/turnkeeper` |
 
-No queue worker or scheduler is needed yet: broadcasts and emails are sent straight away.
+The firewall only lets in SSH, 80 and 443. Security updates install themselves, and fail2ban blocks
+repeated failed SSH logins. No queue worker or scheduler is needed yet: broadcasts and emails are sent
+straight away.
 
-## Before the first deploy (yours to do)
+## Before the first deploy
 
-1. **Domain.** Point an `A` record at the server's IP (and `AAAA` for IPv6 if it has one).
-2. **Email provider** (Resend, Postmark, Mailgun or SES). Add your domain there and create the DNS records it
-   gives you (SPF, DKIM, usually a DMARC record too), so emails arrive in inboxes rather than spam. New accounts
-   can't save anything until they've clicked the link in the verification email, so this has to work.
-3. **Sentry (optional).** Create a Laravel project at sentry.io and copy its DSN.
-4. **Feedback.** Decide where feedback goes: a form (Tally, Google Forms…) or an email address.
-
-## Settings
-
-Copy [deploy/env.production.example](../deploy/env.production.example) to `.env` on the server and fill in
-everything marked `CHANGE ME`. The things that are easy to get wrong:
-
-- `APP_URL` must be the real `https://` address. Links in emails and invites are built from it.
-- `VITE_REVERB_*` are built into the JavaScript, so they must be right before `npm run build`. The browser
-  connects to `wss://<VITE_REVERB_HOST>:443/app`, which the proxy forwards to Reverb.
-- `REVERB_HOST`/`REVERB_PORT` are where the app itself sends broadcasts: Reverb inside the server, over plain
-  http, not the public address.
-- `APP_DEBUG=false`. Error pages with debug on can show secrets.
+1. **Server.** In Hetzner Cloud, create an Ubuntu 24.04 server (the smallest shared-CPU one, e.g. CX22, is plenty
+   for testers) and add your SSH key. Turning on Hetzner's own backups (20% of the server price) gives you
+   copies off the server.
+2. **DNS.** Where you bought the domain, add `A` records for `theturnkeeper.app` and `www.theturnkeeper.app`
+   pointing at the server's IPv4 address (and `AAAA` records for its IPv6 address, if you like). `.app` sites
+   only open over https, so the site won't load until the server has its certificate, which Caddy gets
+   once these records point at it.
+3. **Email (Resend).** In Resend: Domains → Add domain → `theturnkeeper.app`, and add the DNS records it
+   shows you (they prove the domain is yours and keep the emails out of spam). Wait for it to say Verified.
+   Then API Keys → Create, with "Sending access" for that domain. That key is `MAIL_PASSWORD` below. New
+   accounts can't save anything until they've clicked their verification email, so this has to work.
+4. **Optional:** a Sentry project for error reports (copy its DSN), and a feedback form. Without a form, "Send
+   feedback" emails `CONTACT_EMAIL`.
 
 ## First deploy
 
+SSH in as root and run:
+
 ```bash
-git clone https://github.com/Jdolan182/ttrpg-tracker.git && cd ttrpg-tracker
-cp deploy/env.production.example .env   # then fill it in
-composer install --no-dev --optimize-autoloader
-php artisan key:generate
-npm ci && npm run build
-php artisan migrate --force
-php artisan db:seed --class=SrdCreatureSeeder --force
-php artisan config:cache && php artisan route:cache && php artisan view:cache
+git clone https://github.com/Jdolan182/ttrpg-tracker.git /root/turnkeeper-setup
+bash /root/turnkeeper-setup/deploy/server/setup.sh
 ```
 
-Then start Reverb (`php artisan reverb:start`) under your process manager, and point the web server at
-`public/`.
+It takes about five minutes. It creates `/var/www/turnkeeper/.env` from
+[deploy/env.production.example](../deploy/env.production.example) with the database password and Reverb
+keys already filled in. Then fill in the mail settings (and anything optional):
+
+```bash
+sudo -u turnkeeper nano /var/www/turnkeeper/.env
+#   MAIL_HOST=smtp.resend.com
+#   MAIL_USERNAME=resend
+#   MAIL_PASSWORD=<the Resend API key>
+sudo -u turnkeeper php /var/www/turnkeeper/artisan config:cache
+```
+
+Settings are cached, so run `config:cache` after any change to `.env`. Changes to a `VITE_*` setting need
+a full deploy, since those are built into the JavaScript.
+
+Things that are easy to get wrong:
+
+- Mail uses port 587. Hetzner blocks outgoing 25 and 465 on new servers, so those fail without an error.
+- `TRUSTED_PROXIES` stays empty: Caddy hands requests straight to PHP with the visitor's real address.
+  Trusting forwarded headers would let anyone fake their address and dodge the rate limits.
+- `APP_DEBUG=false`. Error pages with debug on can show secrets.
 
 ## Updating
 
 ```bash
-php artisan down
-git pull
-composer install --no-dev --optimize-autoloader
-npm ci && npm run build
-php artisan migrate --force
-php artisan db:seed --class=SrdCreatureSeeder --force   # safe to re-run
-php artisan config:cache && php artisan route:cache && php artisan view:cache
-php artisan reverb:restart
-php artisan up
+sudo -u turnkeeper bash /var/www/turnkeeper/deploy/server/deploy.sh
 ```
 
-## The proxy
-
-With Caddy, something like this (adjust the PHP side to however the app is served):
-
-```caddy
-theturnkeeper.app {
-    # Live player view: websockets to Reverb.
-    @reverb path /app /app/* /apps /apps/*
-    reverse_proxy @reverb 127.0.0.1:8080
-
-    root * /path/to/ttrpg-tracker/public
-    php_fastcgi 127.0.0.1:9000
-    file_server
-    encode gzip
-}
-```
+It shows a "back shortly" page, pulls the latest code, installs, builds, migrates, re-seeds the SRD monsters,
+caches and restarts Reverb, then puts the site back. If a step fails, the site stays in maintenance mode so
+nothing half-updated is served. Fix the problem and run it again, or `php artisan up` to bring it back as it is.
 
 ## Checking it works
 
-- `https://<domain>/up` answers "Application up".
+- `https://theturnkeeper.app/up` answers "Application up".
 - Sign up with a real address: the verification email arrives, and its link opens the real domain.
 - Run a campaign fight with a second browser on the campaign page: it updates within a second. If it only
-  updates every 5 seconds, browsers can't reach Reverb: check the proxy and `VITE_REVERB_*` (then rebuild).
+  updates every 5 seconds, browsers can't reach Reverb: check `systemctl status turnkeeper-reverb` and the
+  `VITE_REVERB_*` settings (then deploy again to rebuild).
 
-## Testers
+Logs: the app's in `/var/www/turnkeeper/storage/logs`, Caddy's in `/var/log/caddy/turnkeeper.log`, and
+`journalctl -u turnkeeper-reverb` for Reverb.
 
-- Give friends the higher limits with `php artisan plan:set friend@example.com pro`.
-- Their feedback arrives wherever `FEEDBACK_URL` points (or by email to `CONTACT_EMAIL` when it's empty); errors they hit show up in Sentry.
+## You and your testers
+
+- Sign up on the site like anyone else; the server has no built-in accounts.
+- Give yourself and friends the higher limits:
+  `sudo -u turnkeeper php /var/www/turnkeeper/artisan plan:set friend@example.com pro`.
+- Their feedback arrives wherever `FEEDBACK_URL` points (or by email to `CONTACT_EMAIL` when it's empty); errors
+  they hit show up in Sentry.
 
 ## Backups
 
-Back up the database daily, e.g. a cron job running
-`pg_dump -Fc turnkeeper > /backups/turnkeeper-$(date +%F).dump`, kept for a couple of weeks, with a copy off the
-server (Hetzner Storage Box, or Hetzner's own server backups). Users can also download their own backups from
-the Encounters page.
+Every night at 03:15 the database is saved to `/var/backups/turnkeeper` (14 days kept). Those copies are on
+the same server, so also turn on Hetzner's server backups, or copy the folder to a Storage Box. To restore one:
+
+```bash
+sudo -u postgres pg_restore --clean --if-exists -d turnkeeper /var/backups/turnkeeper/turnkeeper-<date>.dump
+```
+
+Users can also download their own backups from the Encounters page.

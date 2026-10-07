@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import BackupMenu from '@/components/BackupMenu.vue';
 import BackupNotice from '@/components/BackupNotice.vue';
-import StatBlock from '@/components/StatBlock.vue';
+import CreatureDetail from '@/components/CreatureDetail.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import { confirmAction } from '@/composables/useConfirm';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { logEntry } from '@/lib/combatLog';
@@ -13,8 +14,8 @@ import { readTracker, trackerStorageKey, writeTracker } from '@/lib/trackerStora
 import type { SharedData } from '@/types';
 import type { Creature, CreatureKind, CreatureSource } from '@/types/tracker';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
-import { ArrowUp, Copy, Pencil, Plus, Search, Swords, Trash2 } from 'lucide-vue-next';
-import { computed, nextTick, ref, watch } from 'vue';
+import { Plus, Search, Trash2 } from 'lucide-vue-next';
+import { computed, ref, watch } from 'vue';
 
 const props = defineProps<{
     creatures: Creature[];
@@ -77,13 +78,12 @@ const selected = computed(() => results.value.find((c) => c.id === chosenId.valu
 const linkedIndex = results.value.findIndex((c) => c.id === props.selectedId);
 if (linkedIndex >= BATCH) shown.value = Math.ceil((linkedIndex + 1) / BATCH) * BATCH;
 
-// On phones the stat block is below the list, so choosing a creature jumps down to it, and back.
-const list = ref<HTMLElement | null>(null);
-const detail = ref<HTMLElement | null>(null);
-const stacked = () => !window.matchMedia('(min-width: 1024px)').matches;
+// On phones there's no room beside the list, so choosing a creature opens it in a panel over the list.
+const panelOpen = ref(false);
 const choose = (creature: Creature) => {
     chosenId.value = creature.id;
-    if (stacked()) nextTick(() => detail.value?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    notice.value = '';
+    if (!window.matchMedia('(min-width: 1024px)').matches) panelOpen.value = true;
 };
 
 const filterButtonClass = (active: boolean) =>
@@ -224,8 +224,7 @@ const deleteCreature = async (creature: Creature) => {
             <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
                 <!-- Results: on wide screens a panel that scrolls on its own, next to the stat block -->
                 <div
-                    ref="list"
-                    class="scroll-mt-4 overflow-hidden rounded-xl border border-border bg-card shadow-sm lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:self-start lg:overflow-y-auto"
+                    class="overflow-hidden rounded-xl border border-border bg-card shadow-sm lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:self-start lg:overflow-y-auto"
                 >
                     <p class="sticky top-0 z-10 border-b border-border bg-card px-4 py-2 text-xs text-muted-foreground">
                         {{ results.length }} {{ results.length === 1 ? 'creature' : 'creatures' }}
@@ -263,45 +262,27 @@ const deleteCreature = async (creature: Creature) => {
                     </div>
                 </div>
 
-                <!-- Detail -->
-                <div v-if="selected" ref="detail" class="scroll-mt-4 space-y-4 rounded-xl border border-border bg-card p-4 shadow-sm">
-                    <button
-                        type="button"
-                        class="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground lg:hidden"
-                        @click="list?.scrollIntoView({ behavior: 'smooth', block: 'start' })"
-                    >
-                        <ArrowUp class="size-4" />
-                        Back to the list
-                    </button>
-                    <div class="flex flex-wrap items-center gap-2">
-                        <h2 class="mr-auto text-lg font-semibold">{{ selected.name }}</h2>
-                        <Button variant="outline" size="sm" @click="addToEncounter(selected)">
-                            <Swords />
-                            Add to encounter
-                        </Button>
-                        <Button v-if="!isGuest" variant="outline" size="sm" as-child>
-                            <Link :href="route('creatures.create', { from: selected.id })">
-                                <Copy />
-                                Duplicate
-                            </Link>
-                        </Button>
-                        <template v-if="selected.source === 'homebrew'">
-                            <Button variant="outline" size="sm" as-child>
-                                <Link :href="route('creatures.edit', selected.id)">
-                                    <Pencil />
-                                    Edit
-                                </Link>
-                            </Button>
-                            <Button variant="outline" size="sm" class="text-red-600 dark:text-red-400" @click="deleteCreature(selected)">
-                                <Trash2 />
-                                Delete
-                            </Button>
-                        </template>
-                    </div>
-
-                    <StatBlock :creature="selected" />
+                <!-- Detail: beside the list on wide screens -->
+                <div v-if="selected" class="hidden rounded-xl border border-border bg-card p-4 shadow-sm lg:block">
+                    <CreatureDetail :creature="selected" :is-guest="isGuest" @add="addToEncounter" @delete="deleteCreature" />
                 </div>
             </div>
+
+            <!-- On phones it slides up over the list instead, so closing it goes back to where you were -->
+            <Sheet v-model:open="panelOpen">
+                <SheetContent v-if="selected" side="bottom" class="max-h-[90vh] overflow-y-auto rounded-t-xl lg:hidden">
+                    <SheetTitle class="sr-only">{{ selected.name }}</SheetTitle>
+                    <SheetDescription class="sr-only">Stat block</SheetDescription>
+                    <CreatureDetail
+                        :creature="selected"
+                        :is-guest="isGuest"
+                        :notice="notice"
+                        in-panel
+                        @add="addToEncounter"
+                        @delete="deleteCreature"
+                    />
+                </SheetContent>
+            </Sheet>
 
             <p class="text-xs text-muted-foreground">
                 SRD content from the System Reference Document 5.1 by Wizards of the Coast LLC, licensed under

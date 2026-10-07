@@ -7,8 +7,9 @@
 /storage/pail
 /vendor
 .env
-.env.backup
-.env.production
+# Any copy of the settings (backups, a filled-in production file…), except the example.
+.env.*
+!.env.example
 .phpactor.json
 .phpunit.result.cache
 Homestead.json
@@ -21,7 +22,3 @@ yarn-error.log
 /.nova
 /.vscode
 /.zed
-
-# Left behind only if scripts/share.sh is killed without cleaning up
-.env.before-share
-/public/hot.before-share

@@ -1,0 +1,37 @@
+# Caddy site for Turnkeeper; setup.sh fills in {{DOMAIN}} and {{APP_DIR}} and installs it as
+# /etc/caddy/Caddyfile. Caddy gets and renews the HTTPS certificate on its own (needed: browsers only
+# open .app sites over https).
+
+www.{{DOMAIN}} {
+    redir https://{{DOMAIN}}{uri} permanent
+}
+
+{{DOMAIN}} {
+    encode zstd gzip
+
+    # Live player view: browsers' websockets go to Reverb, which only listens on the server itself.
+    @reverb path /app /app/* /apps /apps/*
+    reverse_proxy @reverb 127.0.0.1:8080
+
+    root * {{APP_DIR}}/public
+    php_fastcgi unix//run/php/turnkeeper.sock
+    file_server
+
+    # Built assets have a hash in their name, so they can be cached for good.
+    @assets path /build/assets/*
+    header @assets Cache-Control "public, max-age=31536000, immutable"
+
+    header {
+        Strict-Transport-Security "max-age=31536000"
+        X-Content-Type-Options nosniff
+        Referrer-Policy strict-origin-when-cross-origin
+        -Server
+    }
+
+    log {
+        output file /var/log/caddy/turnkeeper.log {
+            roll_size 20mb
+            roll_keep 5
+        }
+    }
+}

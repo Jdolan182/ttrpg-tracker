@@ -26,15 +26,6 @@ Run these from WSL in the project folder (`sail` = `./vendor/bin/sail`):
 - `sail artisan db:seed --class=SrdCreatureSeeder` loads the SRD monsters. Safe to re-run, and needed on deploy.
 - Local test login (from `DatabaseSeeder`): test@example.com / `password`.
 
-### Sharing with friends
-
-`./scripts/share.sh` opens a temporary Cloudflare quick tunnel (random `https://….trycloudflare.com`
-link, printed and written to `storage/logs/share.log`). While sharing it sets `APP_DEBUG=false`,
-`TRUSTED_PROXIES=*` and `SHARE_MODE=true` (serve built assets instead of the Vite dev server), and
-restores `.env` from `.env.before-share` when it stops. Stop it with Ctrl+C or `./scripts/share.sh stop`.
-If `.env` is ever left with `SHARE_MODE`/`TRUSTED_PROXIES`, restore it from `.env.before-share`.
-`cloudflared` is installed at `~/.local/bin/cloudflared`.
-
 ## How it's built
 
 - Routes: [routes/web.php](routes/web.php). The tracker (`/`) and compendium (`/compendium`) are public, so
@@ -45,6 +36,8 @@ If `.env` is ever left with `SHARE_MODE`/`TRUSTED_PROXIES`, restore it from `.en
   marked verified by a migration. The account emails' wording is in `AppServiceProvider::wordEmails()` and their look
   in [resources/views/vendor/mail](resources/views/vendor/mail) (only the changed templates are kept there).
 - Running it for real: [docs/deploying.md](docs/deploying.md) and [deploy/env.production.example](deploy/env.production.example).
+  One Hetzner Ubuntu 24.04 server (Caddy, PHP-FPM, Postgres, Reverb under systemd), set up by `deploy/server/setup.sh`
+  and updated by `deploy/server/deploy.sh`; the server pulls from GitHub, so changes must be pushed to deploy.
   With an `https://` `APP_URL`, every generated link uses it (`AppServiceProvider::pinLinksToAppUrl()`). Errors go to
   Sentry when `SENTRY_LARAVEL_DSN` is set. "Send feedback" (footer and account menu) goes to `FEEDBACK_URL`, else emails `CONTACT_EMAIL`; `/privacy` is the
   plain-language privacy note, so keep it true when what's stored changes.
@@ -88,8 +81,7 @@ If `.env` is ever left with `SHARE_MODE`/`TRUSTED_PROXIES`, restore it from `.en
   TS mirror [resources/js/lib/playerView.ts](resources/js/lib/playerView.ts) covers the DM's own Player view and
   the same-computer `/player-view` window, fed through localStorage. Change both together.
   Broadcasts (`CampaignCombatChanged` on `private-campaign.{id}`) are only a ping; viewers then fetch the view
-  over HTTP (`useCampaignCombat`), and poll every 5s when the socket is down. In share mode, friends can't reach
-  Reverb through the tunnel, so they rely on that polling.
+  over HTTP (`useCampaignCombat`), and poll every 5s when the socket is down.
 - **Backups** ([app/Support/Backup.php](app/Support/Backup.php)): JSON with `format`/`version`. Your own
   creatures in full, SRD ones by name only; combatants point at creatures by `ref` (`c{id}`), never by
   database id. Import is all-or-nothing, checks limits first, validates like the forms, and reuses identical
