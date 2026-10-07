@@ -70,5 +70,7 @@ Decisions agreed for the next stretch of work, in build order. Update this as th
   rolls, concentration prompts and death saves from damage at 0 HP. Each needs its own manual
   replacement (e.g. a "mark as ready" button for a spent recharge), so add them one at a time, starting
   with whatever feedback asks for. Today everything automatic is logged and can be undone.
+- An admin page for the owner: the `turnkeeper:stats` totals (`App\Support\SiteStats`) over time, as graphs.
+  Totals only, never people's content; behind a check that only the owner's account passes, and tested so.
 - Lair actions and scene events: initiative entries that aren't creatures (a lair on initiative 20, a
   collapsing ceiling, reinforcements). The SRD dragons carry "Lair Actions" as plain text for now.

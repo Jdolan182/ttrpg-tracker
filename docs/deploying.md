@@ -94,6 +94,20 @@ Logs: the app's in `/var/www/turnkeeper/storage/logs`, Caddy's in `/var/log/cadd
 - Their feedback arrives wherever `FEEDBACK_URL` points (or by email to `CONTACT_EMAIL` when it's empty); errors
   they hit show up in Sentry.
 
+## How it's being used
+
+Totals (accounts, what's been made, active users), never anyone's content:
+
+```bash
+ssh turnkeeper "sudo -u turnkeeper php /var/www/turnkeeper/artisan turnkeeper:stats"
+```
+
+To browse the data in HeidiSQL or similar, use the read-only login made by
+[deploy/server/readonly-db-user.sh](../deploy/server/readonly-db-user.sh). It can't see passwords, sessions or
+reset tokens, and can't change anything. Open a tunnel with `ssh -N turnkeeper-db` and leave it running, then
+connect the app to PostgreSQL at `127.0.0.1`, port `5433`, user `turnkeeper_readonly`, database `turnkeeper`.
+Its password: `ssh turnkeeper "cat /root/turnkeeper-readonly-password"`.
+
 ## Backups
 
 Every night at 03:15 the database is saved to `/var/backups/turnkeeper` (14 days kept). Those copies are on
