@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-time setup of a fresh Hetzner Ubuntu 24.04 server for Turnkeeper. Run it as root:
+# One-time setup of a fresh Hetzner Ubuntu server (24.04 or 26.04) for Turnkeeper. Run it as root:
 #
 #     git clone https://github.com/Jdolan182/ttrpg-tracker.git /root/turnkeeper-setup
 #     bash /root/turnkeeper-setup/deploy/server/setup.sh
@@ -16,6 +16,7 @@ REPO="${REPO:-https://github.com/Jdolan182/ttrpg-tracker.git}"
 APP_USER=turnkeeper
 APP_DIR=/var/www/turnkeeper
 DB_NAME=turnkeeper
+# PHP from the usual PHP archive where it supports this Ubuntu; otherwise Ubuntu's own (see below).
 PHP=8.4
 NODE_MAJOR=22
 PG=18
@@ -41,9 +42,18 @@ ufw allow 80/tcp
 ufw allow 443/tcp
 ufw --force enable
 
+CODENAME="$(. /etc/os-release && echo "$VERSION_CODENAME")"
+if [ -f "/etc/apt/sources.list.d/ondrej-ubuntu-php-$CODENAME.sources" ] \
+    || curl -fsI "https://ppa.launchpadcontent.net/ondrej/php/ubuntu/dists/$CODENAME/Release" >/dev/null; then
+    # Ubuntu 24.04: its own PHP is 8.3, so a newer one comes from the usual PHP archive.
+    add-apt-repository -y ppa:ondrej/php
+    apt-get update -q
+else
+    # Ubuntu 26.04 and later ship a recent PHP themselves (8.5 on 26.04), before that archive has them.
+    PHP="$(apt-cache depends php-fpm | grep -oE 'php[0-9]+\.[0-9]+-fpm' | head -1 | sed -e 's/^php//' -e 's/-fpm$//')"
+    [ -n "$PHP" ] || { echo "Couldn't tell which PHP this Ubuntu ships."; exit 1; }
+fi
 step "PHP $PHP"
-add-apt-repository -y ppa:ondrej/php
-apt-get update -q
 apt-get install -yq "php$PHP-fpm" "php$PHP-cli" "php$PHP-pgsql" "php$PHP-mbstring" "php$PHP-xml" \
     "php$PHP-curl" "php$PHP-zip" "php$PHP-bcmath" "php$PHP-intl"
 if ! command -v composer >/dev/null; then
