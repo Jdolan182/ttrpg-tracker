@@ -4,6 +4,8 @@ import type { LucideIcon } from 'lucide-vue-next';
 
 export interface Auth {
     user: User | null;
+    // Can see the admin page (the "viewAdmin" gate in AppServiceProvider).
+    isAdmin: boolean;
 }
 
 export interface NavItem {

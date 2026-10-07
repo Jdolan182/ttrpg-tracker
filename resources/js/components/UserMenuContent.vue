@@ -3,7 +3,7 @@ import UserInfo from '@/components/UserInfo.vue';
 import { DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import type { SharedData, User } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
-import { LogOut, MessageSquareHeart, Settings } from 'lucide-vue-next';
+import { ChartColumn, LogOut, MessageSquareHeart, Settings } from 'lucide-vue-next';
 
 interface Props {
     user: User;
@@ -11,7 +11,8 @@ interface Props {
 
 defineProps<Props>();
 
-const feedbackUrl = usePage<SharedData>().props.feedbackUrl;
+const { feedbackUrl, auth } = usePage<SharedData>().props;
+const isAdmin = auth.isAdmin;
 </script>
 
 <template>
@@ -26,6 +27,12 @@ const feedbackUrl = usePage<SharedData>().props.feedbackUrl;
             <Link class="block w-full" :href="route('profile.edit')" as="button">
                 <Settings class="mr-2 h-4 w-4" />
                 Settings
+            </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem v-if="isAdmin" :as-child="true">
+            <Link class="block w-full" :href="route('admin')" as="button">
+                <ChartColumn class="mr-2 h-4 w-4" />
+                Site stats
             </Link>
         </DropdownMenuItem>
         <DropdownMenuItem v-if="feedbackUrl" :as-child="true">

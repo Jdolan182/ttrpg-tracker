@@ -43,6 +43,8 @@ class HandleInertiaRequests extends Middleware
                 ?: (config('app.contact_email') ? 'mailto:'.config('app.contact_email').'?subject='.rawurlencode(config('app.name').' feedback') : null),
             'auth' => [
                 'user' => $request->user(),
+                // Shows the admin page's link in the account menu.
+                'isAdmin' => fn () => $request->user()?->can('viewAdmin') ?? false,
             ],
             // Usage against the account's limits, e.g. creatures: {used: 12, limit: 25}. Null for guests.
             'limits' => fn () => $request->user() ? Limits::summary($request->user()) : null,

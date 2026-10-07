@@ -9,6 +9,7 @@ use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Http\Request;
 use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
@@ -38,6 +39,11 @@ class AppServiceProvider extends ServiceProvider
         self::pinLinksToAppUrl();
         $this->wordEmails();
         $this->limitRequests();
+
+        // The admin page: only accounts listed in ADMIN_EMAILS, and only once that email is confirmed, so
+        // nobody gets in by signing up with the address before its owner does.
+        Gate::define('viewAdmin', fn (User $user) => $user->hasVerifiedEmail()
+            && in_array(strtolower($user->email), config('app.admin_emails'), true));
     }
 
     /**

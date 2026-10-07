@@ -57,6 +57,8 @@ class User extends Authenticatable implements MustVerifyEmail
         'password',
         'remember_token',
         'plan',
+        // Bookkeeping for the admin page's totals (App\Support\Visits); nothing on screen uses it.
+        'last_active_at',
     ];
 
     /**
@@ -68,6 +70,7 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return [
             'email_verified_at' => 'datetime',
+            'last_active_at' => 'datetime',
             'password' => 'hashed',
         ];
     }

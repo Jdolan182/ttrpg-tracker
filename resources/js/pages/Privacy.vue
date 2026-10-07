@@ -21,7 +21,7 @@ const appName = usePage<SharedData>().props.appName;
         <article class="mx-auto w-full max-w-2xl space-y-6 p-4 py-8 text-sm leading-relaxed">
             <header class="space-y-1">
                 <h1 class="text-2xl font-semibold tracking-tight">Privacy</h1>
-                <p class="text-muted-foreground">What {{ appName }} keeps about you, and why. Last updated 6 October 2026.</p>
+                <p class="text-muted-foreground">What {{ appName }} keeps about you, and why. Last updated 7 October 2026.</p>
             </header>
 
             <section class="space-y-2">
@@ -33,18 +33,28 @@ const appName = usePage<SharedData>().props.appName;
             </section>
 
             <section class="space-y-2">
+                <h2 class="text-base font-semibold">Counting visits</h2>
+                <p>
+                    To know how many people use the site, each visitor is counted once a day. Your device and browser are turned into a one-way code
+                    that changes every day, so it can't be traced back to you or link one day to the next, and it's deleted after two days. Only the
+                    daily totals are kept. There are no tracking cookies, no stored IP addresses, and nothing is shared with an analytics company.
+                </p>
+            </section>
+
+            <section class="space-y-2">
                 <h2 class="text-base font-semibold">With an account</h2>
                 <ul class="list-disc space-y-1 pl-5">
                     <li>Your name and email address, and your password (stored scrambled, so nobody can read it).</li>
                     <li>What you make: creatures and characters, saved encounters, campaigns, and your display settings.</li>
+                    <li>The date you last used the site, so we can count how many accounts are active.</li>
                     <li>
                         In a campaign, your name and the character you've claimed are shown to its DM and the other players. If you run one, the fight
                         you're running is shown to its players while combat is on.
                     </li>
                 </ul>
                 <p>
-                    A cookie keeps you logged in. There are no adverts, no tracking cookies and no analytics. Your details aren't sold, and are only
-                    passed to the services the app needs to run, like the one that sends its emails.
+                    A cookie keeps you logged in. There are no adverts, no tracking cookies and no analytics services. Your details aren't sold, and
+                    are only passed to the services the app needs to run, like the one that sends its emails.
                 </p>
             </section>
 

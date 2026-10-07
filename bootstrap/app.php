@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\CountVisit;
 use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -23,6 +24,8 @@ return Application::configure(basePath: dirname(__DIR__))
             AddLinkHeadersForPreloadedAssets::class,
             // The "writes" limit (AppServiceProvider): only changes by signed-in accounts count.
             ThrottleRequests::using('writes'),
+            // Daily visitor totals for the admin page.
+            CountVisit::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

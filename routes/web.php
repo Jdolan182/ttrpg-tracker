@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AdminController;
 use App\Http\Controllers\BackupController;
 use App\Http\Controllers\CampaignCombatController;
 use App\Http\Controllers\CampaignController;
@@ -53,6 +54,9 @@ Route::get('join/{token}', [CampaignPlayerController::class, 'show'])->name('cam
 Route::inertia('player-view', 'PlayerView')->name('player-view');
 
 Route::middleware(['auth', 'verified'])->group(function () {
+    // The owner's usage totals; anyone not in ADMIN_EMAILS gets a 404.
+    Route::get('admin', AdminController::class)->name('admin');
+
     Route::get('encounters', [EncounterController::class, 'list'])->name('encounters.list');
     Route::post('encounters', [EncounterController::class, 'store'])->name('encounters.store');
     Route::get('encounters/{encounter}/export', [BackupController::class, 'exportEncounter'])->name('encounters.export');

@@ -51,6 +51,12 @@ return [
     // Who to contact about personal data, shown on the privacy page. Falls back to the mail from-address.
     'contact_email' => env('CONTACT_EMAIL', env('MAIL_FROM_ADDRESS')),
 
+    // Accounts that can see the admin page (/admin), as a comma-separated list of emails. Empty: nobody.
+    'admin_emails' => array_values(array_filter(array_map(
+        fn (string $email) => strtolower(trim($email)),
+        explode(',', (string) env('ADMIN_EMAILS', '')),
+    ))),
+
     /*
     |--------------------------------------------------------------------------
     | Application URL

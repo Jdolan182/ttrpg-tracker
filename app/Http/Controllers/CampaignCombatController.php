@@ -6,6 +6,7 @@ use App\Events\CampaignCombatChanged;
 use App\Models\Campaign;
 use App\Support\EncounterPayload;
 use App\Support\PlayerView;
+use App\Support\Visits;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
@@ -73,6 +74,11 @@ class CampaignCombatController extends Controller
         ])->save();
 
         $this->pingIfChanged($campaign, $before);
+
+        // For the admin page: the busiest moment of the day for the live view.
+        if ($campaign->live !== null) {
+            rescue(fn () => Visits::recordLiveTables());
+        }
 
         return response()->noContent();
     }

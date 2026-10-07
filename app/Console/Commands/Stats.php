@@ -40,6 +40,17 @@ class Stats extends Command
             ['Campaigns', $s['campaigns'], "{$s['players']} players joined, {$s['live']} with a fight live now"],
         ]);
 
+        $t = SiteStats::traffic(30);
+        $this->table(['Visits', 'Total', ''], [
+            ['Visitors today', $t['today']['visitors'], "{$t['today']['accounts']} logged in"],
+            ['Daily visitors', $t['averageVisitors7'], "average over 7 days ({$t['averageVisitors30']} over 30)"],
+            ['Accounts active', $t['activeAccounts']['month'], "this month ({$t['activeAccounts']['week']} this week, {$t['activeAccounts']['today']} today)"],
+            ['Live tables at once', $t['peakLiveTables'], 'most in the last 30 days'],
+        ]);
+        if ($t['trackedDays'] < 30) {
+            $this->line("  Visits have been counted for {$t['trackedDays']} day(s); the averages cover that time.");
+        }
+
         return self::SUCCESS;
     }
 }
