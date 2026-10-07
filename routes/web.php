@@ -8,6 +8,7 @@ use App\Http\Controllers\CampaignPartyController;
 use App\Http\Controllers\CampaignPlayerController;
 use App\Http\Controllers\CreatureController;
 use App\Http\Controllers\EncounterController;
+use App\Support\Seo;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -20,6 +21,29 @@ Route::get('privacy', fn () => Inertia::render('Privacy', [
     'contactEmail' => config('app.contact_email'),
     'errorTracking' => (bool) config('sentry.dsn'),
 ]))->name('privacy');
+
+// For search engines: what to crawl, and the public pages. Built here rather than as files in public/
+// so the addresses come from APP_URL.
+Route::get('robots.txt', fn () => response(implode("\n", [
+    'User-agent: *',
+    // Behind a login, or only meaningful to one person; the pages themselves also say noindex.
+    'Disallow: /settings',
+    'Disallow: /encounters',
+    'Disallow: /campaigns',
+    'Disallow: /join/',
+    'Disallow: /player-view',
+    'Disallow: /backup',
+    '',
+    'Sitemap: '.url('sitemap.xml'),
+    '',
+]))->header('Content-Type', 'text/plain'))->name('robots');
+
+Route::get('sitemap.xml', fn () => response(
+    '<?xml version="1.0" encoding="UTF-8"?>'."\n".
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'."\n".
+    collect(Seo::sitemapPaths())->map(fn (string $path) => '  <url><loc>'.e(url($path)).'</loc></url>')->implode("\n")."\n".
+    '</urlset>'."\n",
+)->header('Content-Type', 'application/xml'))->name('sitemap');
 
 // Invite links work for guests too: the page asks them to log in or sign up, then brings them back.
 Route::get('join/{token}', [CampaignPlayerController::class, 'show'])->name('campaigns.join');

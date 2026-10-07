@@ -1,0 +1,67 @@
+<!doctype html>
+<!-- The link-preview image (public/og-image.png, 1200x630). Re-render after editing:
+     docker run --rm -v "$PWD/resources/og:/work" --entrypoint chromium-browser zenika/alpine-chrome --headless --no-sandbox
+       --hide-scrollbars --window-size=1200,630 --virtual-time-budget=5000 --screenshot=/work/og-image.png file:///work/og-image.html
+     then move resources/og/og-image.png to public/. -->
+<html>
+<head>
+<meta charset="utf-8">
+<link href="https://fonts.bunny.net/css?family=fraunces:600|instrument-sans:400,500,600" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1200px; height: 630px; }
+  body {
+    background: #faf8f5; color: #1d1916; font-family: 'Instrument Sans', sans-serif;
+    display: flex; align-items: center; gap: 56px; padding: 0 72px; overflow: hidden; position: relative;
+  }
+  body::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 14px; background: #a02233; }
+  .left { flex: 1; }
+  .brand { display: flex; align-items: center; gap: 18px; margin-bottom: 40px; }
+  .mark { width: 76px; height: 76px; border-radius: 16px; background: #a02233; display: grid; place-items: center; }
+  .wordmark { font-family: 'Fraunces', serif; font-weight: 600; font-size: 52px; letter-spacing: -0.01em; }
+  h1 { font-family: 'Fraunces', serif; font-weight: 600; font-size: 50px; line-height: 1.12; letter-spacing: -0.015em; }
+  .sub { margin-top: 22px; font-size: 25px; color: #6e645e; line-height: 1.4; }
+  .url { margin-top: 34px; font-size: 22px; font-weight: 600; color: #a02233; }
+  .card { width: 420px; background: #fff; border: 1px solid #e4ded8; border-radius: 18px; box-shadow: 0 18px 40px rgba(29, 25, 22, .10); overflow: hidden; }
+  .card-head { display: flex; justify-content: space-between; padding: 16px 22px; border-bottom: 1px solid #e4ded8; font-size: 15px; color: #6e645e; }
+  .round { background: #a02233; color: #fff; border-radius: 999px; padding: 3px 12px; font-weight: 600; font-family: 'Fraunces', serif; }
+  .row { display: grid; grid-template-columns: 40px 1fr 110px; align-items: center; gap: 12px; padding: 16px 22px; border-bottom: 1px solid #efe9e3; font-size: 19px; }
+  .row:last-child { border-bottom: 0; }
+  .row.active { background: #fbf1f2; box-shadow: inset 5px 0 0 #a02233; }
+  .init { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .name { display: flex; align-items: center; gap: 10px; font-weight: 500; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .hp { font-size: 15px; color: #6e645e; font-variant-numeric: tabular-nums; }
+  .hp { display: block; }
+  .bar { display: block; height: 7px; border-radius: 4px; background: #efe9e3; margin-top: 5px; overflow: hidden; }
+  .bar span { display: block; height: 100%; border-radius: 4px; }
+</style>
+</head>
+<body>
+  <div class="left">
+    <div class="brand">
+      <div class="mark">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#faf8f5" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M12 2 21 7v10l-9 5-9-5V7l9-5Z" /><path d="M12 7.5 7 15.5h10L12 7.5Z" />
+          <path d="M12 2v5.5M3 7l4 8.5M21 7l-4 8.5M7 15.5 3 17M17 15.5 21 17M7 15.5 12 22l5-6.5" />
+        </svg>
+      </div>
+      <div class="wordmark">Turnkeeper</div>
+    </div>
+    <h1>A free combat tracker for D&amp;D 5e and other tabletop RPGs</h1>
+    <p class="sub">Initiative, HP, conditions and recharges, with a live view for your players.</p>
+    <p class="url">theturnkeeper.app</p>
+  </div>
+  <div class="card">
+    <div class="card-head"><span class="round">Round 3</span><span>Adult Red Dragon's turn</span></div>
+    <div class="row"><span class="init">18</span><span class="name"><span class="dot" style="background:#0ea5e9"></span>Aria</span>
+      <span><span class="hp">31 / 38</span><span class="bar"><span style="width:82%;background:#10b981"></span></span></span></div>
+    <div class="row active"><span class="init">15</span><span class="name"><span class="dot" style="background:#ef4444"></span>Adult Red Dragon</span>
+      <span><span class="hp">140 / 256</span><span class="bar"><span style="width:55%;background:#10b981"></span></span></span></div>
+    <div class="row"><span class="init">12</span><span class="name"><span class="dot" style="background:#0ea5e9"></span>Borin</span>
+      <span><span class="hp">9 / 44</span><span class="bar"><span style="width:20%;background:#ef4444"></span></span></span></div>
+    <div class="row"><span class="init">7</span><span class="name"><span class="dot" style="background:#10b981"></span>Guard</span>
+      <span><span class="hp">8 / 11</span><span class="bar"><span style="width:73%;background:#f59e0b"></span></span></span></div>
+  </div>
+</body>
+</html>

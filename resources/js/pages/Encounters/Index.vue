@@ -7,6 +7,7 @@ import GroupDamageDialog from '@/components/GroupDamageDialog.vue';
 import PlayerCombatView from '@/components/PlayerCombatView.vue';
 import CombatantPanel from '@/components/tracker/CombatantPanel.vue';
 import EncounterBar from '@/components/tracker/EncounterBar.vue';
+import GuestIntro, { introDismissed } from '@/components/tracker/GuestIntro.vue';
 import InitiativeList from '@/components/tracker/InitiativeList.vue';
 import TurnBar from '@/components/tracker/TurnBar.vue';
 import { Button } from '@/components/ui/button';
@@ -16,6 +17,7 @@ import { provideTracker } from '@/composables/tracker/useTracker';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { Brain, ExternalLink, MonitorPlay, Plus } from 'lucide-vue-next';
+import { ref } from 'vue';
 
 const props = defineProps<TrackerProps>();
 
@@ -43,17 +45,22 @@ const {
     chosenStatus,
     useAction,
 } = provideTracker(props);
+
+// Guests see what Turnkeeper is until they close it once.
+const introOpen = ref(!introDismissed());
 </script>
 
 <template>
-    <Head title="Encounters" />
+    <!-- Matches App\Support\Seo, which gives search engines the same title -->
+    <Head title="Combat and initiative tracker" />
 
     <AppLayout>
         <div class="flex h-full flex-1 flex-col gap-4 p-4">
+            <GuestIntro v-if="isGuest" v-model:open="introOpen" />
             <EncounterBar />
             <TurnBar />
 
-            <p v-if="isGuest" class="text-sm text-muted-foreground">
+            <p v-if="isGuest && !introOpen" class="text-sm text-muted-foreground">
                 You're using the tracker as a guest with the SRD monsters. Your fight is kept in this browser only, so export an encounter to keep it,
                 or
                 <Link :href="route('register')" class="font-medium text-foreground underline underline-offset-4">create a free account</Link>
