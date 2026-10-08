@@ -52,7 +52,7 @@ const introOpen = ref(!introDismissed());
 
 <template>
     <!-- Matches App\Support\Seo, which gives search engines the same title -->
-    <Head title="Combat and initiative tracker" />
+    <Head title="Encounter & Initiative Tracker for D&D and Any TTRPG" />
 
     <AppLayout>
         <div class="flex h-full flex-1 flex-col gap-4 p-4">

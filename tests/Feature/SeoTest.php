@@ -19,8 +19,8 @@ class SeoTest extends TestCase
         config()->set('app.name', 'Turnkeeper');
 
         $this->get('/')->assertOk()
-            ->assertSee('<title inertia>Combat and initiative tracker - Turnkeeper</title>', false)
-            ->assertSee('<meta name="description" content="Free combat and initiative tracker', false)
+            ->assertSee('<title inertia>Encounter &amp; Initiative Tracker for D&amp;D and Any TTRPG - Turnkeeper</title>', false)
+            ->assertSee('<meta name="description" content="Free encounter and combat tracker for D&amp;D 5e and any other tabletop RPG', false)
             ->assertSee('<meta property="og:image" content="'.asset('og-image.png').'"', false)
             ->assertSee('<link rel="canonical" href="'.url('/').'"', false)
             ->assertSee('"@type":"WebApplication"', false)

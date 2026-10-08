@@ -47,7 +47,7 @@ const dismiss = () => {
                 <AppLogoIcon class="size-7" />
             </div>
             <div class="space-y-3">
-                <h1 class="font-display text-2xl font-semibold tracking-tight">A free combat tracker for D&amp;D 5e and other tabletop RPGs</h1>
+                <h1 class="font-display text-2xl font-semibold tracking-tight">A free encounter tracker for D&amp;D and any other tabletop RPG</h1>
                 <p class="max-w-3xl text-sm text-muted-foreground">
                     Roll initiative, track hit points, conditions and concentration, and let it count down recharges, cooldowns and legendary actions
                     for you. Over 300 SRD monsters are built in, and it works with any game: name your own stats. Run a campaign and your players can

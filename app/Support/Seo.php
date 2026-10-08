@@ -13,9 +13,10 @@ class Seo
     // Pages worth finding from a search. Anything else (settings, your own campaigns and encounters,
     // invites…) is marked noindex: it's behind a login or only means something to one person.
     private const PUBLIC = [
+        // "D&D" and "encounter tracker" are what people search; "any TTRPG" is what it is.
         'Encounters/Index' => [
-            'title' => 'Combat and initiative tracker',
-            'description' => 'Free combat and initiative tracker for D&D 5e and other tabletop RPGs. Roll initiative, track HP, conditions, concentration and recharges, and show your players the fight live on their phones.',
+            'title' => 'Encounter & Initiative Tracker for D&D and Any TTRPG',
+            'description' => 'Free encounter and combat tracker for D&D 5e and any other tabletop RPG. Roll initiative, track HP, conditions and recharges, use 300+ SRD monsters or your own stats, and show players the fight live. No account needed.',
         ],
         'Compendium/Index' => [
             'title' => 'Compendium',
